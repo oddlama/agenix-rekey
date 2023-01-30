@@ -56,5 +56,4 @@ in rec {
         ${concatStringsSep "\n" (mapAttrsToList copyHostSecrets self.nixosConfigurations)}
       '';
   };
-  default = rekey;
 }
