@@ -27,10 +27,7 @@ with lib; {
       warnings = let
         hasGoodSuffix = x: strings.hasSuffix ".age" x || strings.hasSuffix ".pub" x;
       in
-        optional (!rekeyedSecrets.isBuilt) ''
-          The secrets for host ${config.networking.hostName} have not yet been rekeyed!
-          Be sure to run `nix run ".#rekey"` after changing your secrets!
-        ''
+        optional (!rekeyedSecrets.isBuilt) ''The secrets for host ${config.networking.hostName} have not yet been rekeyed! Be sure to run `nix run ".#rekey"` after changing your secrets!''
         ++ optional (!all hasGoodSuffix config.rekey.masterIdentityPaths) ''
           It seems like at least one of your rekey.masterIdentityPaths contains an
           unencrypted age identity. These files will be copied to the nix store, so

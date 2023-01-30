@@ -13,10 +13,11 @@ in rec {
   # Using drvPath doesn't force evaluation, which allows this to be used to show warning
   # messages in case the derivation is not built before deploying
   isBuilt = pathExists (removeSuffix ".drv" drv.drvPath);
+
   # This is the derivation that copies the rekeyed secrets into the nix-store.
   drv = derivation rec {
     inherit (pkgs) system;
-    name = "rekeyed-host-secrets";
+    name = "agenix-rekey-host-secrets";
     description = "Rekeyed secrets for host ${config.networking.hostName} (${pubkeyHash})";
 
     # All used secrets are inputs to this derivation. Technically we don't access
@@ -33,7 +34,7 @@ in rec {
       ${pkgs.coreutils}/bin/mkdir -p "$out"
       # Ensure that the contents of the /tmp directory actually belong to this derivation
       [ $(${pkgs.coreutils}/bin/cat "/${tmpSecretsDir}/personality") = $(${pkgs.coreutils}/bin/basename .) ] \
-        || { echo "The existing rekeyed secrets in /tmp are out-of-date. Please re-run the rekey command." >&2; exit 1; }
+        || { echo "[1;31mThe existing rekeyed secrets in /tmp are out-of-date. Please re-run the rekey command.[m" >&2; exit 1; }
       ${pkgs.coreutils}/bin/cp -r "${tmpSecretsDir}/." "$out"
     '';
   };
