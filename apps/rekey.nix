@@ -4,7 +4,8 @@
   flake-utils,
   ...
 }: system:
-with nixpkgs.lib flake-utils.lib; let
+with nixpkgs.lib;
+with flake-utils.lib; let
   pkgs = import nixpkgs {inherit system;};
 in rec {
   rekey = mkApp {
