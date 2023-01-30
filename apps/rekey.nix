@@ -22,11 +22,11 @@ in rec {
         in ''
           echo "Rekeying ${secretName} for host ${hostName}"
           ${envPath} ${pkgs.rage}/bin/rage ${masterIdentityArgs} -d ${secretAttrs.file} \
-            | ${envPath} ${pkgs.rage}/bin/rage -r "${hostPubkeyStr}" -o "${secretOut}" -e \
+            | ${envPath} ${pkgs.rage}/bin/rage -r "${hostAttrs.config.rekey.hostPubkey}" -o "${secretOut}" -e \
             || { \
               echo "[1;31mFailed to rekey secret ${secretName} for ${hostName}![m" ; \
               echo "This is a dummy replacement value. The actual secret could not be rekeyed." \
-                | ${envPath} ${pkgs.rage}/bin/rage -r "${hostPubkeyStr}" -o "${secretOut}" -e ; \
+                | ${envPath} ${pkgs.rage}/bin/rage -r "${hostAttrs.config.rekey.hostPubkey}" -o "${secretOut}" -e ; \
             }
         '';
       in ''
