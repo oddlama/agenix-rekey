@@ -1,10 +1,12 @@
 {
-  description = "An agenix extension to facilitate Yubikey/master-identity use by automating per-host secret rekeying";
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-  inputs.flake-utils.url = "github:numtide/flake-utils";
-  inputs.agenix = {
-    url = "github:ryantm/agenix";
-    inputs.nixpkgs.follows = "nixpkgs";
+  description = "An agenix extension to facilitate using a Yubikey/master-identity by automating per-host secret rekeying";
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
+    agenix = {
+      url = "github:ryantm/agenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
   outputs = {
     self,

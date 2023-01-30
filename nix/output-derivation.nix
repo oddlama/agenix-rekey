@@ -32,7 +32,7 @@ in rec {
     builder = pkgs.writeShellScript "copy-rekeyed-secrets" ''
       ${pkgs.coreutils}/bin/mkdir -p "$out"
       # Ensure that the contents of the /tmp directory actually belong to this derivation
-      [ $(${pkgs.coreutils}/bin/cat "/${tmpSecretsDir}/personality") = "${personality}" ] \
+      [ $(${pkgs.coreutils}/bin/cat "/${tmpSecretsDir}/personality") = $(${pkgs.coreutils}/bin/basename .) ] \
         || { echo "The existing rekeyed secrets in /tmp are out-of-date. Please re-run the rekey command." >&2; exit 1; }
       ${pkgs.coreutils}/bin/cp -r "${tmpSecretsDir}/." "$out"
     '';
