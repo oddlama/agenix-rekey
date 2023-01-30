@@ -3,8 +3,9 @@
   nixpkgs,
   flake-utils,
   ...
-}: system: with nixpkgs.lib; let
-  pkgs = import nixpkgs { inherit system; };
+}: system:
+with nixpkgs.lib; let
+  pkgs = import nixpkgs {inherit system;};
 in rec {
   rekey = flake-utils.mkApp {
     drv = let
@@ -36,7 +37,8 @@ in rec {
         ${concatStringsSep "\n" (mapAttrsToList rekeyCommand hostAttrs.config.rekey.secrets)}
         echo "${rekeyedSecrets.personality}" > "${tmpSecretsDir}/personality"
       '';
-    in pkgs.writeShellScript "rekey" ''
+    in
+      pkgs.writeShellScript "rekey" ''
         set -euo pipefail
         ${concatStringsSep "\n" (mapAttrsToList rekeyCommandsForHost self.nixosConfigurations)}
         nix run --extra-sandbox-paths /tmp "${../.}#rekey-save-outputs";

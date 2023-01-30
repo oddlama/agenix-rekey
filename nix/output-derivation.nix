@@ -1,4 +1,5 @@
-pkgs: config: with pkgs.lib; let
+pkgs: config:
+with pkgs.lib; let
   pubkeyHash = builtins.hashString "sha1" config.rekey.hostPubkey;
 in rec {
   # The directory where rekeyed secrets are temporarily stored. Since
