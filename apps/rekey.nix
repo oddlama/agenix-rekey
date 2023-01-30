@@ -4,10 +4,10 @@
   flake-utils,
   ...
 }: system:
-with nixpkgs.lib; let
+with nixpkgs.lib flake-utils.lib; let
   pkgs = import nixpkgs {inherit system;};
 in rec {
-  rekey = flake-utils.mkApp {
+  rekey = mkApp {
     drv = let
       rekeyCommandsForHost = hostName: hostAttrs: let
         rekeyedSecrets = import ../nix/output-derivation.nix pkgs hostAttrs.config;
@@ -44,7 +44,7 @@ in rec {
         nix run --extra-sandbox-paths /tmp "${../.}#rekey-save-outputs";
       '';
   };
-  rekey-save-outputs = flake-utils.mkApp {
+  rekey-save-outputs = mkApp {
     drv = let
       copyHostSecrets = hostName: hostAttrs: let
         drv = import ../nix/output-derivation.nix pkgs hostAttrs.config;

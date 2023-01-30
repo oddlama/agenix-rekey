@@ -11,11 +11,12 @@
     flake-utils,
     ...
   } @ inputs:
-    {
-      nixosModules.agenixRekey = import ./modules/agenix-rekey.nix;
-      nixosModules.default = self.nixosModules.agenixRekey;
-    }
-    // flake-utils.eachSystem flake-utils.allSystems (system: {
-      apps = import ./apps/rekey.nix inputs system;
-    });
+    with flake-utils.lib;
+      {
+        nixosModules.agenixRekey = import ./modules/agenix-rekey.nix;
+        nixosModules.default = self.nixosModules.agenixRekey;
+      }
+      // eachSystem allSystems (system: {
+        apps = import ./apps/rekey.nix inputs system;
+      });
 }
