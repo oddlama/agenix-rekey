@@ -1,13 +1,22 @@
 hostPkgs: hostConfig:
 with hostPkgs.lib; let
+  # All secrets that the derivation will depend upon. Technically we don't need access
+  # to them, but the derivation has to be rebuilt if the secrets change.
+  secrets = mapAttrsToList (_: x: x.file) hostConfig.rekey.secrets;
+  # The hash of the pubkey will be used to enforce a rebuilt when the pubkey changes.
   pubkeyHash = builtins.hashString "sha1" hostConfig.rekey.hostPubkey;
+  # A predictable unique string that depends on all inputs. Used to generate
+  # a unique location in /tmp which can be preseverved between invocations
+  # of rekeying and deployment.
+  personality = builtins.hashString "sha512" (toString (secrets ++
+    (map (builtins.hashFile "sha512") secrets) ++
+    [pubkeyHash]));
+  # Shortened personality truncated to 32 characters
+  shortPersonality = builtins.substring 0 32 personality;
 in rec {
   # The directory where rekeyed secrets are temporarily stored. Since
-  tmpSecretsDir = "/tmp/agenix-rekey/${pubkeyHash}";
-  # A predictable unique string that depends on all inputs. Used to
-  # ensure that the content in /tmp is correctly preseverved between invocations
-  # of rekeying and deployment.
-  personality = builtins.baseNameOf (removeSuffix ".drv" drv.drvPath);
+  tmpSecretsDir = "/tmp/agenix-rekey/${shortPersonality}";
+
   # Indicates whether the derivation has already been built and is available in the store.
   # Using drvPath doesn't force evaluation, which allows this to be used to show warning
   # messages in case the derivation is not built before deploying
@@ -18,7 +27,7 @@ in rec {
   # allowing the result to be system-agnostic.
   drv = hostPkgs.stdenv.mkDerivation {
     name = "agenix-rekey-host-secrets";
-    description = "Rekeyed secrets for host ${hostConfig.networking.hostName} (${pubkeyHash})";
+    description = "Rekeyed secrets for host ${hostConfig.networking.hostName} (${shortPersonality})";
 
     # No special inputs are necessary.
     dontUnpack = true;
@@ -28,12 +37,8 @@ in rec {
     dontFixup = true;
     dontCopyDist = true;
 
-    # All used secrets are inputs to this derivation. Technically we don't even access
-    # them here, but the derivation still has to be rebuilt if the secrets change.
-    secrets = mapAttrsToList (_: x: x.file) hostConfig.rekey.secrets ++ [pubkeyHash];
-    # The pubkey hash for this host is also required as an additional input to
-    # force a derivation rebuild if it changes in the future.
-    inherit pubkeyHash;
+    # Enforce a rebuild if any input changes.
+    inherit personality;
 
     # When this derivation is built, the rekeyed secrets must be copied
     # into the derivation output, so they are stored permanently and become accessible
@@ -41,11 +46,8 @@ in rec {
     installPhase = ''
       mkdir -p "$out"
       # Ensure that the rekey command has already been executed.
-      test -e "/${tmpSecretsDir}/personality" \
-        || { echo "[1;31mNo rekeyed secrets were found, please execute \`nix run \".#rekey\"\` first.[m" >&2; exit 1; }
-      # Ensure that the contents of the /tmp directory actually belong to this derivation
-      [ $(cat "/${tmpSecretsDir}/personality") = $(basename .) ] \
-        || { echo "[1;31mThe existing rekeyed secrets in /tmp are out-of-date. Please re-run \`nix run \".#rekey\"\`.[m" >&2; exit 1; }
+      [[ -e "/${tmpSecretsDir}" ]] \
+        || { echo "[1;31mNo rekeyed secrets were found, please (re)execute \`nix run \".#rekey\"\`.[m" >&2; exit 1; }
       cp -r "${tmpSecretsDir}/." "$out"
     '';
   };
