@@ -13,7 +13,7 @@ with lib; {
       # Produce a rekeyed age secret for each of the secrets defined in rekey.secrets
       age.secrets = mapAttrs (secretName:
         flip mergeAttrs {
-          file = "${rekeyedSecrets}/${secretName}";
+          file = "${rekeyedSecrets.drv}/${secretName}";
         })
       config.rekey.secrets;
 

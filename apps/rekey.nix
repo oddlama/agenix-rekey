@@ -12,7 +12,7 @@ in rec {
     drv = let
       rekeyCommandsForHost = hostName: hostAttrs: let
         rekeyedSecrets = import ../nix/output-derivation.nix pkgs hostAttrs.config;
-        inherit (rekeyedSecrets) tmpSecretsDir;
+        inherit (rekeyedSecrets) tmpSecretsDir personality;
         inherit (hostAttrs.config.rekey) agePlugins hostPubkey masterIdentityPaths secrets;
 
         # Collect paths to enabled age plugins for this host
@@ -37,7 +37,7 @@ in rec {
 
         # Rekey secrets for this host
         ${concatStringsSep "\n" (mapAttrsToList rekeyCommand secrets)}
-        echo "${rekeyedSecrets.personality}" > "${tmpSecretsDir}/personality"
+        echo "${personality}" > "${tmpSecretsDir}/personality"
       '';
     in
       pkgs.writeShellScript "rekey" ''
@@ -51,7 +51,7 @@ in rec {
     drv = let
       copyHostSecrets = hostName: hostAttrs: let
         rekeyedSecrets = import ../nix/output-derivation.nix pkgs hostAttrs.config;
-      in ''echo "Stored rekeyed secrets for ${hostAttrs.config.networking.hostName} in ${rekeyedSecrets}"'';
+      in ''echo "Stored rekeyed secrets for ${hostAttrs.config.networking.hostName} in ${rekeyedSecrets.drv}"'';
     in
       pkgs.writeShellScript "rekey-save-outputs" ''
         set -euo pipefail
