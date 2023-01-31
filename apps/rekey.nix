@@ -43,7 +43,8 @@ in rec {
       pkgs.writeShellScript "rekey" ''
         set -euo pipefail
         ${concatStringsSep "\n" (mapAttrsToList rekeyCommandsForHost self.nixosConfigurations)}
-        nix run --extra-sandbox-paths /tmp "${../.}#rekey-save-outputs";
+        # Pivot to another script that has /tmp available in its sandbox
+        nix run --extra-sandbox-paths /tmp "${self.outPath}#rekey-save-outputs";
       '';
   };
   rekey-save-outputs = mkApp {
