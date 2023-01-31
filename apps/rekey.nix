@@ -50,8 +50,8 @@ in rec {
   rekey-save-outputs = mkApp {
     drv = let
       copyHostSecrets = hostName: hostAttrs: let
-        drv = import ../nix/output-derivation.nix pkgs hostAttrs.config;
-      in ''echo "Stored rekeyed secrets for ${hostAttrs.config.networking.hostName} in ${drv}"'';
+        rekeyedSecrets = import ../nix/output-derivation.nix pkgs hostAttrs.config;
+      in ''echo "Stored rekeyed secrets for ${hostAttrs.config.networking.hostName} in ${rekeyedSecrets}"'';
     in
       pkgs.writeShellScript "rekey-save-outputs" ''
         set -euo pipefail
