@@ -16,7 +16,9 @@ in rec {
 
   # This is the derivation that copies the rekeyed secrets into the nix-store.
   drv = derivation rec {
-    inherit (pkgs) system;
+    # This derivation is intended to be built on the system that evaluates the flake.
+    # The result is fully system agnostic can be used on any target system
+    system = builtins.currentSystem;
     name = "agenix-rekey-host-secrets";
     description = "Rekeyed secrets for host ${config.networking.hostName} (${pubkeyHash})";
 
