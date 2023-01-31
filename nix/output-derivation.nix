@@ -32,9 +32,12 @@ in rec {
     # to the host via the predictable output path for this derivation
     builder = pkgs.writeShellScript "copy-rekeyed-secrets" ''
       ${pkgs.coreutils}/bin/mkdir -p "$out"
+      # Ensure that the rekey command has already been executed.
+      test -e "/${tmpSecretsDir}/personality" \
+        || { echo "[1;31mNo rekeyed secrets were found, please execute \`nix run \".#rekey\"\` first.[m" >&2; exit 1; }
       # Ensure that the contents of the /tmp directory actually belong to this derivation
       [ $(${pkgs.coreutils}/bin/cat "/${tmpSecretsDir}/personality") = $(${pkgs.coreutils}/bin/basename .) ] \
-        || { echo "[1;31mThe existing rekeyed secrets in /tmp are out-of-date. Please re-run the rekey command.[m" >&2; exit 1; }
+        || { echo "[1;31mThe existing rekeyed secrets in /tmp are out-of-date. Please re-run \`nix run \".#rekey\"\`.[m" >&2; exit 1; }
       ${pkgs.coreutils}/bin/cp -r "${tmpSecretsDir}/." "$out"
     '';
   };
