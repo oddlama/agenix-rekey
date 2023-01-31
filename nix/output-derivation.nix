@@ -3,7 +3,7 @@ with hostPkgs.lib; let
   pubkeyHash = builtins.hashString "sha1" hostConfig.rekey.hostPubkey;
 in rec {
   # The directory where rekeyed secrets are temporarily stored. Since
-  tmpSecretsDir = "/tmp/nix-rekey/${pubkeyHash}";
+  tmpSecretsDir = "/tmp/agenix-rekey/${pubkeyHash}";
   # A predictable unique string that depends on all inputs. Used to
   # ensure that the content in /tmp is correctly preseverved between invocations
   # of rekeying and deployment.
