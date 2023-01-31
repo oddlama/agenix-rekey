@@ -13,20 +13,21 @@ in rec {
       rekeyCommandsForHost = hostName: hostAttrs: let
         rekeyedSecrets = import ../nix/output-derivation.nix pkgs hostAttrs.config;
         inherit (rekeyedSecrets) tmpSecretsDir;
+        inherit (hostAttrs.config.rekey) agePlugins hostPubkey masterIdentityPaths secrets;
 
-        # Enable selected age plugins for this host
-        envPath = ''PATH="$PATH${concatMapStrings (x: ":${x}/bin") hostAttrs.config.rekey.agePlugins}"'';
+        # Collect paths to enabled age plugins for this host
+        envPath = ''PATH="$PATH${concatMapStrings (x: ":${x}/bin") agePlugins}"'';
+        masterIdentityArgs = concatMapStrings (x: ''-i "${x}" '') masterIdentityPaths;
         rekeyCommand = secretName: secretAttrs: let
-          masterIdentityArgs = concatMapStrings (x: ''-i "${x}" '') hostAttrs.config.rekey.masterIdentityPaths;
           secretOut = "${tmpSecretsDir}/${secretName}.age";
         in ''
           echo "Rekeying ${secretName} for host ${hostName}"
           ${envPath} ${pkgs.rage}/bin/rage ${masterIdentityArgs} -d ${secretAttrs.file} \
-            | ${envPath} ${pkgs.rage}/bin/rage -r "${hostAttrs.config.rekey.hostPubkey}" -o "${secretOut}" -e \
+            | ${envPath} ${pkgs.rage}/bin/rage -r "${hostPubkey}" -o "${secretOut}" -e \
             || { \
               echo "[1;31mFailed to rekey secret ${secretName} for ${hostName}![m" ; \
               echo "This is a dummy replacement value. The actual secret could not be rekeyed." \
-                | ${envPath} ${pkgs.rage}/bin/rage -r "${hostAttrs.config.rekey.hostPubkey}" -o "${secretOut}" -e ; \
+                | ${envPath} ${pkgs.rage}/bin/rage -r "${hostPubkey}" -o "${secretOut}" -e ; \
             }
         '';
       in ''
@@ -35,7 +36,7 @@ in rec {
         mkdir -p "${tmpSecretsDir}"
 
         # Rekey secrets for this host
-        ${concatStringsSep "\n" (mapAttrsToList rekeyCommand hostAttrs.config.rekey.secrets)}
+        ${concatStringsSep "\n" (mapAttrsToList rekeyCommand secrets)}
         echo "${rekeyedSecrets.personality}" > "${tmpSecretsDir}/personality"
       '';
     in
