@@ -1,9 +1,9 @@
 {
   self,
-  nixpkgs,
-  flake-utils,
+  nixpkgs,      # FIXME: technically this is an input to the parent flake and might not exist
+  flake-utils,  # FIXME: technically this is an input to the parent flake and might not exist
   ...
-}: system:
+}: system: nixosConfigurations:
 with nixpkgs.lib;
 with flake-utils.lib; let
   pkgs = import nixpkgs {inherit system;};
@@ -92,7 +92,7 @@ in rec {
           done
         }
 
-        ${concatStringsSep "\n" (mapAttrsToList rekeyCommandsForHost self.nixosConfigurations)}
+        ${concatStringsSep "\n" (mapAttrsToList rekeyCommandsForHost nixosConfigurations)}
         # Pivot to another script that has /tmp available in its sandbox
         nix run --extra-sandbox-paths /tmp "${self.outPath}#rekey-save-outputs";
       '';
@@ -105,7 +105,7 @@ in rec {
     in
       pkgs.writeShellScriptBin "rekey-save-outputs" ''
         set -euo pipefail
-        ${concatStringsSep "\n" (mapAttrsToList copyHostSecrets self.nixosConfigurations)}
+        ${concatStringsSep "\n" (mapAttrsToList copyHostSecrets nixosConfigurations)}
       '';
   };
 }
