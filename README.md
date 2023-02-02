@@ -10,3 +10,7 @@ No changes necessary
 
 ## How does it work?
 
+# Usage
+
+```nix
+```

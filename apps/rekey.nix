@@ -1,7 +1,7 @@
 {
   self,
-  nixpkgs,      # FIXME: technically this is an input to the parent flake and might not exist
-  flake-utils,  # FIXME: technically this is an input to the parent flake and might not exist
+  nixpkgs, # FIXME: technically this is an input to the parent flake and might not exist
+  flake-utils, # FIXME: technically this is an input to the parent flake and might not exist
   ...
 }: system: nixosConfigurations:
 with nixpkgs.lib;

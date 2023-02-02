@@ -8,9 +8,9 @@ with hostPkgs.lib; let
   # A predictable unique string that depends on all inputs. Used to generate
   # a unique location in /tmp which can be preseverved between invocations
   # of rekeying and deployment.
-  personality = builtins.hashString "sha512" (toString (secrets ++
-    (map (builtins.hashFile "sha512") secrets) ++
-    [pubkeyHash]));
+  personality = builtins.hashString "sha512" (toString (secrets
+    ++ (map (builtins.hashFile "sha512") secrets)
+    ++ [pubkeyHash]));
   # Shortened personality truncated to 32 characters
   shortPersonality = builtins.substring 0 32 personality;
 in rec {
