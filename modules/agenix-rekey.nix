@@ -8,6 +8,8 @@
 with lib; {
   config = let
     rekeyedSecrets = import ../nix/output-derivation.nix pkgs config;
+    # This pubkey is just binary 0x01 in each byte, so you can be sure there is no known private key for this
+    dummyPubkey = "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3290gq";
   in
     mkIf (config.rekey.secrets != {}) {
       # Produce a rekeyed age secret for each of the secrets defined in rekey.secrets
@@ -19,21 +21,34 @@ with lib; {
 
       assertions = [
         {
-          assertion = config.rekey.masterIdentityPaths != [];
-          message = "rekey.masterIdentityPaths must be set.";
+          assertion = config.rekey.masterIdentities != [];
+          message = "rekey.masterIdentities must be set.";
         }
       ];
 
       warnings = let
-        hasGoodSuffix = x: strings.hasSuffix ".age" x || strings.hasSuffix ".pub" x;
+        hasGoodSuffix = x: (strings.hasSuffix ".age" x || strings.hasSuffix ".pub" x);
       in
         optional (!rekeyedSecrets.isBuilt) ''The secrets for host ${config.networking.hostName} have not yet been rekeyed! Be sure to run `nix run ".#rekey"` after changing your secrets!''
-        ++ optional (!all hasGoodSuffix config.rekey.masterIdentityPaths) ''
-          It seems like at least one of your rekey.masterIdentityPaths contains an
-          unencrypted age identity. These files will be copied to the nix store, so
-          make sure they don't contain any secret information!
+        ++ optional (!all hasGoodSuffix config.rekey.masterIdentities) ''
+          At least one of your rekey.masterIdentities references an unencrypted age identity in your nix store!
+          ${concatMapStrings (x: "  - ${x}\n") (filter hasGoodSuffix config.rekey.masterIdentities)}
 
-          To silence this warning, encrypt your keys and name them *.pub or *.age.
+          These files have already been copied to the nix store, and are now publicly readable!
+          Please make sure they don't contain any secret information or delete them now.
+
+          To silence this warning, you may:
+            - Use a split-identity ending in `.pub`, where the private part is not contained (a yubikey identity)
+            - Use an absolute path to your key outside of the nix store ("/home/myuser/age-master-key")
+            - Or encrypt your age identity and use the extension `.age`. You can encrypt an age identity
+              using `rage -p -o privkey.age privkey` which protects it in your store.
+        ''
+        ++ optional (config.rekey.hostPubkey == dummyPubkey) ''
+          You have not yet specified rekey.hostPubkey for your host ${config.networking.hostName}.
+          All secrets for this host will be rekeyed with a dummy key, resulting in an activation failure.
+
+          This is intentional so you can initially deploy your system to read the actual pubkey.
+          Once you have the pubkey, set rekey.hostPubkey to the content or a file containing the pubkey.
         '';
     };
 
@@ -42,37 +57,39 @@ with lib; {
     rekey.hostPubkey = mkOption {
       type = with types; coercedTo path readFile str;
       description = ''
-        The age public key to use as a recipient when rekeying.
-        This either has to be the path to an age public key file,
-        or the public key itself in string form.
+        The age public key to use as a recipient when rekeying. This either has to be the
+        path to an age public key file, or the public key itself in string form.
 
-        Make sure to NEVER use a private key here, as it will end
-        up in the public nix store!
+        Make sure to NEVER use a private key here, as it will end up in the public nix store!
       '';
-      #example = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEyH9Vx7WJZWW+6tnDsF7JuflcxgjhAQHoCWVrjLXQ2U my-host";
-      #example = "age159tavn5rcfnq30zge2jfq4yx60uksz8udndp0g3njzhrns67ca5qq3n0tj";
+      default = dummyPubkey;
+      #example = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI.....";
+      #example = "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3290gq";
       example = /etc/ssh/ssh_host_ed25519_key.pub;
     };
-    rekey.masterIdentityPaths = mkOption {
-      type = types.listOf types.path;
+    rekey.masterIdentities = mkOption {
+      type = with types; coercedTo str toString path;
       description = ''
-        The age identity used to decrypt the secrets stored in the repository, so they can be rekeyed for a specific host.
-        This identity will be stored in the nix store, so be sure to use a split-identity (like a yubikey identity, which is public),
-        or an encrypted age identity. You can encrypt an age identity using `rage -p -o privkey.age privkey` to protect it in your store.
+        The age identity used to decrypt your secrets. Be careful when using paths here,
+        as they will be copied to the nix store. The recommended options are:
 
-        All identities given here will be passed to age, which will select one of them for decryption.
+        - Use a split-identity ending in `.pub`, where the private part is not contained (a yubikey identity)
+        - Use an absolute path to your key outside of the nix store ("/home/myuser/age-master-key")
+        - Or encrypt your age identity and use the extension `.age`. You can encrypt an age identity
+          using `rage -p -o privkey.age privkey` which protects it in your store.
+
+        All identities given here will be passed to age, which will consider them for decryption in this order.
       '';
       default = [];
-      example = [./secrets/my-yubikey-identity.txt];
+      example = [./secrets/my-public-yubikey-identity.txt];
     };
     rekey.agePlugins = mkOption {
       type = types.listOf types.package;
-      default = [];
+      default = [pkgs.age-plugin-yubikey];
       description = ''
         A list of plugins that should be available to rage while rekeying.
         They will be added to the PATH before rage is invoked.
       '';
-      example = [pkgs.age-plugin-yubikey];
     };
   };
 }
