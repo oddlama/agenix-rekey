@@ -164,7 +164,14 @@ in rec {
         fi
         shasum_before="$(sha512sum "$CLEARTEXT_FILE")"
 
-        $EDITOR "$CLEARTEXT_FILE" \
+        # Editor options to prevent leaking information
+        EDITOR_OPTS=()
+        case "$EDITOR" in
+            "vim"|"vim "*|nvim"|"nvim "*)
+                EDITOR_OPTS=("--cmd" 'au BufRead * setlocal history=0 nobackup nomodeline noshelltemp noswapfile noundofile nowritebackup secure viminfo=""') ;;
+            *) ;;
+        esac
+        $EDITOR ''${EDITOR_OPTS[@]} "$CLEARTEXT_FILE" \
             || die "Editor returned unsuccessful exit status. Aborting, original is left unchanged."
 
         shasum_after="$(sha512sum "$CLEARTEXT_FILE")"

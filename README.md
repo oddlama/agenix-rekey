@@ -1,11 +1,13 @@
 # agenix-rekey
 
-`agenix-rekey` is an extension to agenix which facilitates using a master-key to manage
-all secrets in your repository. Typically this will be a YubiKey or a password protected age identity.
+`agenix-rekey` is an extension for [agenix](https://github.com/ryantm/agenix) which facilitates using a YubiKey
+or a master age identity to manage all secrets in your repository.
 
 What differentiates this from "classical" agenix is that your secrets will automatically be
-rekeyed only for the hosts that require it. additionally, they don't need to be added
-to your flake repository since they are entierly ephemeral. You can read [how it works](#how-does-it-work) below.
+rekeyed only for the hosts that require it, and replaces writing any form of `secrets.nix`.
+All required information for encryption and decryption will be deduced from your flake.
+Additionally, rekeyed secrets never have to be added to your flake repository.
+You can read more about [how it works](#how-does-it-work) below. A short summary:
 
 - No need to manually keep track of which key is needed for which host (no `secrets.nix`)
 - Rekeyed secrets never have to be added to your flake repository, thus
@@ -126,13 +128,20 @@ For new installations, the setup process will be the following:
     }
     ```
 
-2. Encrypt some secrets using age and your master key
+2. Encrypt some secrets using (r)age and your master key. `agenix-rekey` defines the `edit-secret` app in your flake,
+   which allows you to edit/create secrets using your favorite `$EDITOR`, and automatically uses the correct identities for de- and encryption.
 
     ```bash
-    echo "secret" | age -e -r ./your-yubikey-identity.pub > secret1.age
+    nix run ".#edit-secret" secret1.age
+
+    # Alternatively you can encrypt something manually using (r)age
+    echo "secret" | rage -e -i ./your-yubikey-identity.pub > secret1.age
     ```
 
-3. Add secret to your config
+   Be careful when chosing your `$EDITOR` here, it might leak secret information when editing the file
+   by means of undo-history, or caching in general. For `vim` and `nvim` this app automatically disables related options.
+
+3. Add the secret to your config
 
     ```nix
     {
@@ -146,7 +155,10 @@ For new installations, the setup process will be the following:
     {
       users.users.user1 = {
         passwordFile = config.rekey.secrets.secret1.path;
-        #passwordFile = config.age.secrets.secret1.path; # Using .age is also fine
+
+        # Since this is just a wrapper, only the definition must use rekey.secrets.
+        # If you prefer, you may use it by accessing age.secrets directly.
+        #passwordFile = config.age.secrets.secret1.path;
       };
     }
     ```
@@ -169,10 +181,15 @@ an external input in form of your master password or has to communicate with a Y
 The second problem is that building your system requires the rekeyed secrets to be available
 in the nix-store, which we want to achieve without requiring you to track them in git.
 
-`agenix-rekey` solves the impurity by having you (the user) expose an app in your flake,
+#### Working with impurity
+
+`agenix-rekey` solves the impurity problem by requiring you to expose an app in your flake,
 which you can invoke with `nix run '.#rekey'` whenever your secrets need to be rekeyed.
-This script will be able to interactively run `age` to rekey the secrets and since it
-has access to your host configurations it can infer which hosts use which secrets.
+This script will run in your host-environment and thus is able to prompt for passwords
+or read YubiKeys. It therefore can run `age` to rekey the secrets and since it still
+has access to your host configurations in your flake, it can stil access all necessary information.
+
+#### Predicting store paths to avoid tracking rekeyed secrets
 
 The more complicated second problem is solved by using a predictable store-path for
 the resulting rekeyed secrets by putting them in a special derivation for each host.
