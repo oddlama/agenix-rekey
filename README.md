@@ -148,44 +148,14 @@ For new installations, the setup process will be the following:
     }
     ```
 
+5. Run `nixos-rebuild` or use your deployment tools as usual. If you need to rekey,
+   you will be prompted to do that.
 
-<details>
-<summary>
-Adapting an existing agenix configuration
-</summary>
-
-1. Replace all occurrences of `age.secrets` with `rekey.secrets` in your configuration. The options are exactly the same,
-and will be passed through to agenix. Just the `file` attribute will be rewritten to use the rekeyed secret instead.
-2. 
-3. Delete `secrets.nix`
-
-</details>
-
-
-#### Change secret definitions
-
-To allow the rekeying process to work, `agenix-rekey` must be able to change the encrypted file agenix tries to use.
-Furthermore, some meta information is required so the rekey app knows which identity to use for decrypting.
-Simply replace all `age.secrets` with `rekey.secrets` in your config:
-
-```nix
-{
-rekey.secrets.test.file = ./some-secret-encrypted-with-master-key.age
-# Identities to try in decryption process
-rekey.masterIdentities = [ ./yubikey-identity.pub ]; # Passwort-encrypted master key (will enter the store, but that's fine)
-# TODO allow path in masterident
-}
-```
-
-If you are using a special tool to deploy your configuration on remote systems, you need
-to make sure that the derivation containing the rekeyed secrets is copied to the store of
-the host for which it is intended. This may depend on whether you are using remote-builders
-and other details of your particular tool.
-
-- [colmena](https://github.com/zhaofengli/colmena) automatically [copies](https://github.com/zhaofengli/colmena/issues/134) locally available derivations, so no additional care has to be taken here
-- I didn't test other tools.
-
-## Bootstrapping a host for which the ssh host key isn't known (Chicken-egg problem)
+   If you are deploying your configuration to remote systems, you need to make sure that
+   the correct derivation containing the rekeyed secrets is copied to the remote host's store.
+   
+   - [colmena](https://github.com/zhaofengli/colmena) automatically [copies](https://github.com/zhaofengli/colmena/issues/134) locally available derivations, so no additional care has to be taken here
+   - I didn't test other tools.
 
 ## How does it work?
 

@@ -1,12 +1,11 @@
-{
-  self,
-  nixpkgs, # FIXME: technically this is an input to the parent flake and might not exist
-  flake-utils, # FIXME: technically this is an input to the parent flake and might not exist
-  ...
-}: system: nixosConfigurations:
-with nixpkgs.lib;
-with flake-utils.lib; let
+# TODO consolidate nixpkgs and system in to pkgs?
+self: nixpkgs: system: nixosConfigurations:
+with nixpkgs.lib; let
   pkgs = import nixpkgs {inherit system;};
+  mkApp = { drv }: {
+    type = "app";
+    program = "${drv}";
+  };
 in rec {
   rekey = mkApp {
     drv = let
@@ -23,7 +22,7 @@ in rec {
         in ''
           echo "Rekeying ${secretName} (${secretAttrs.file}) for host ${hostName}"
           ${envPath} decrypt "${secretAttrs.file}" "${secretName}" "${hostName}" ${masterIdentityArgs} \
-            | ${envPath} ${pkgs.rage}/bin/rage -r "${hostPubkey}" -o "${secretOut}" -e
+            | ${envPath} ${pkgs.rage}/bin/rage -e -r "${hostPubkey}" -o "${secretOut}"
         '';
       in ''
         # Remove old rekeyed secrets
@@ -34,7 +33,7 @@ in rec {
         ${concatStringsSep "\n" (mapAttrsToList rekeyCommand secrets)}
       '';
     in
-      pkgs.writeShellScriptBin "rekey" ''
+      pkgs.writeShellScript "rekey" ''
         set -euo pipefail
 
         dummy_all=0
@@ -58,7 +57,7 @@ in rec {
           # Outer loop, allows us to retry the command
           while true; do
             # Try command
-            if ${pkgs.rage}/bin/rage "$@" -d "$secret_file"; then
+            if ${pkgs.rage}/bin/rage -d "$@" "$secret_file"; then
               return
             fi
 
@@ -105,110 +104,64 @@ in rec {
         rekeyedSecrets = import ../nix/output-derivation.nix pkgs hostAttrs.config;
       in ''echo "Stored rekeyed secrets for ${hostAttrs.config.networking.hostName} in ${rekeyedSecrets.drv}"'';
     in
-      pkgs.writeShellScriptBin "rekey-save-outputs" ''
+      pkgs.writeShellScript "rekey-save-outputs" ''
         set -euo pipefail
         ${concatStringsSep "\n" (mapAttrsToList copyHostSecrets nixosConfigurations)}
       '';
   };
   # Create/edit a secret using your $EDITOR and automatically encrypt it using your specified master identities.
   edit-secret = mkApp {
-    drv = pkgs.writeShellScriptBin "edit-secret" ''
-        set -euo pipefail
+    drv = let
+      inherit (hostAttrs.config.rekey) agePlugins masterIdentities secrets;
+      # TODO warn if editing secret that isn't used
+      envPath = ''PATH="$PATH${concatMapStrings (x: ":${x}/bin") agePlugins}"'';
+      masterIdentityArgs = concatMapStrings (x: ''-i "${x}" '') masterIdentities;
+    in pkgs.writeShellScript "edit-secret" ''
+        set -uo pipefail
 
+        function die() { echo "$*" >&2; exit 1; }
         function show_help() {
-          echo 'app edit-secret - create/edit age secret files with $EDITOR'
-          echo ""
-          echo "nix run '.#edit-secret' FILE"
-          echo ""
-          echo 'options:'
-          echo '-h, --help                show help'
-          echo ""
-          echo 'FILE an age-encrypted file to edit or a new'
-          echo '     file to create'
+            echo 'app edit-secret - create/edit age secret files with $EDITOR'
+            echo ""
+            echo "nix run '.#edit-secret' FILE"
+            echo ""
+            echo 'options:'
+            echo '-h, --help                show help'
+            echo ""
+            echo 'FILE an age-encrypted file to edit or a new'
+            echo '     file to create'
         }
-        [[ $# -eq 0 ||  ]] && { show_help; exit 1; }
-        REKEY=0
-        DEFAULT_DECRYPT=(--decrypt)
-        while test $# -gt 0; do
-          case "$1" in
-            -h|--help)
-              show_help
-              exit 0
-              ;;
-            *)
-              show_help
-              exit 1
-              ;;
-          esac
-        done
-        RULES=''${RULES:-./secrets.nix}
-        function cleanup {
-            if [ ! -z ''${CLEARTEXT_DIR+x} ]
-            then
-                rm -rf "$CLEARTEXT_DIR"
-            fi
-            if [ ! -z ''${REENCRYPTED_DIR+x} ]
-            then
-                rm -rf "$REENCRYPTED_DIR"
-            fi
-        }
-        trap "cleanup" 0 2 3 15
-        function edit {
-            FILE=$1
-            KEYS=$((${nixInstantiate} --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" rules.\"$FILE\".publicKeys)" | ${sedBin} 's/"//g' | ${sedBin} 's/\\n/\n/g') | ${sedBin} '/^$/d' || exit 1)
-            if [ -z "$KEYS" ]
-            then
-                >&2 echo "There is no rule for $FILE in $RULES."
-                exit 1
-            fi
-            CLEARTEXT_DIR=$(${mktempBin} -d)
-            CLEARTEXT_FILE="$CLEARTEXT_DIR/$(basename "$FILE")"
-            if [ -f "$FILE" ]
-            then
-                DECRYPT=("''${DEFAULT_DECRYPT[@]}")
-                if [ -f "$HOME/.ssh/id_rsa" ]; then
-                    DECRYPT+=(--identity "$HOME/.ssh/id_rsa")
-                fi
-                if [ -f "$HOME/.ssh/id_ed25519" ]; then
-                    DECRYPT+=(--identity "$HOME/.ssh/id_ed25519")
-                fi
-                if [[ "''${DECRYPT[*]}" != *"--identity"* ]]; then
-                  echo "No identity found to decrypt $FILE. Try adding an SSH key at $HOME/.ssh/id_rsa or $HOME/.ssh/id_ed25519 or using the --identity flag to specify a file."
-                  exit 1
-                fi
-                DECRYPT+=(-o "$CLEARTEXT_FILE" "$FILE")
-                ${ageBin} "''${DECRYPT[@]}" || exit 1
-                cp "$CLEARTEXT_FILE" "$CLEARTEXT_FILE.before"
-            fi
-            $EDITOR "$CLEARTEXT_FILE"
-            if [ ! -f "$CLEARTEXT_FILE" ]
-            then
-              echo "$FILE wasn't created."
-              return
-            fi
-            [ -f "$FILE" ] && [ "$EDITOR" != ":" ] && ${diffBin} "$CLEARTEXT_FILE.before" "$CLEARTEXT_FILE" 1>/dev/null && echo "$FILE wasn't changed, skipping re-encryption." && return
-            ENCRYPT=()
-            while IFS= read -r key
-            do
-                ENCRYPT+=(--recipient "$key")
-            done <<< "$KEYS"
-            REENCRYPTED_DIR=$(${mktempBin} -d)
-            REENCRYPTED_FILE="$REENCRYPTED_DIR/$(basename "$FILE")"
-            ENCRYPT+=(-o "$REENCRYPTED_FILE")
-            ${ageBin} "''${ENCRYPT[@]}" <"$CLEARTEXT_FILE" || exit 1
-            mv -f "$REENCRYPTED_FILE" "$1"
-        }
-        function rekey {
-            FILES=$((${nixInstantiate} --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" (builtins.attrNames rules))"  | ${sedBin} 's/"//g' | ${sedBin} 's/\\n/\n/g') || exit 1)
-            for FILE in $FILES
-            do
-                echo "rekeying $FILE..."
-                EDITOR=: edit "$FILE"
-                cleanup
-            done
-        }
-        [ $REKEY -eq 1 ] && rekey && exit 0
-        edit "$FILE" && cleanup && exit 0
+        [[ $# -eq 0 || "$1" == "--help" ]] && { show_help; exit 1; }
+
+        FILE="$1"
+        CLEARTEXT_FILE=$(${pkgs.mktemp}/bin/mktemp)
+        ENCRYPTED_FILE=$(${pkgs.mktemp}/bin/mktemp)
+
+        function cleanup() {
+            [[ -e ''${CLEARTEXT_FILE} ]] && rm "$CLEARTEXT_FILE"
+            [[ -e ''${ENCRYPTED_FILE} ]] && rm "$ENCRYPTED_FILE"
+        }; trap "cleanup" EXIT
+
+        if [[ -e "$FILE" ]]; then
+            ${envPath} ${pkgs.rage}/bin/rage -d ${masterIdentityArgs} -o "$CLEARTEXT_FILE" "$FILE" \
+                || die "Failed to decrypt file. Aborting."
+        fi
+        shasum_before="$(sha512sum "$CLEARTEXT_FILE")"
+
+        $EDITOR "$CLEARTEXT_FILE" \
+            || die "Editor returned unsuccessful exit status. Aborting, original is left unchanged."
+
+        shasum_after="$(sha512sum "$CLEARTEXT_FILE")"
+        if [[ "$shasum_before" == "$shasum_after" ]]; then
+            echo "No content changes, original is left unchanged."
+            exit 0
+        fi
+
+        ${envPath} ${pkgs.rage}/bin/rage -e ${masterIdentityArgs} -o "$ENCRYPTED_FILE" "$CLEARTEXT_FILE" \
+            || die "Failed to (re)encrypt edited file, original is left unchanged."
+        cp --no-preserve=all "$ENCRYPTED_FILE" "$FILE" # cp instead of mv preserves original attributes and permissions
+
+        exit 0
       '';
   };
 }
