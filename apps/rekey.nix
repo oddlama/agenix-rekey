@@ -129,62 +129,63 @@ in rec {
         mergedExtraEncryptionPubkeys;
     in
       pkgs.writeShellScript "edit-secret" ''
-        set -uo pipefail
+              set -uo pipefail
 
-        function die() { echo "$*" >&2; exit 1; }
-        function show_help() {
-            echo 'app edit-secret - create/edit age secret files with $EDITOR'
-            echo ""
-            echo "nix run '.#edit-secret' FILE"
-            echo ""
-            echo 'options:'
-            echo '-h, --help                show help'
-            echo ""
-            echo 'FILE an age-encrypted file to edit or a new'
-            echo '     file to create'
-            echo ""
-            echo 'age plugins: ${concatStringsSep ", " mergedAgePlugins}'
-            echo 'master identities: ${concatStringsSep ", " mergedMasterIdentities}'
-            echo 'extra encryption pubkeys: ${concatStringsSep ", " mergedExtraEncryptionPubkeys}'
-        }
-        [[ $# -eq 0 || "''${1-}" == "--help" || "''${2-}" == "help" ]] && { show_help; exit 1; }
+              function die() { echo "[1;31merror:[m $*" >&2; exit 1; }
+              function show_help() {
+                  echo 'app edit-secret - create/edit age secret files with $EDITOR'
+                  echo ""
+                  echo "nix run '.#edit-secret' FILE"
+                  echo ""
+                  echo 'options:'
+                  echo '-h, --help                show help'
+                  echo ""
+                  echo 'FILE an age-encrypted file to edit or a new'
+                  echo '     file to create'
+                  echo ""
+                  echo 'age plugins: ${concatStringsSep ", " mergedAgePlugins}'
+                  echo 'master identities: ${concatStringsSep ", " mergedMasterIdentities}'
+                  echo 'extra encryption pubkeys: ${concatStringsSep ", " mergedExtraEncryptionPubkeys}'
+              }
+              [[ $# -eq 0 || "''${1-}" == "--help" || "''${2-}" == "help" ]] && { show_help; exit 1; }
 
-        FILE="$1"
-        CLEARTEXT_FILE=$(${pkgs.mktemp}/bin/mktemp)
-        ENCRYPTED_FILE=$(${pkgs.mktemp}/bin/mktemp)
+              FILE="$1"
+              [[ "$FILE" != *".age" ]] && echo "[1;33mwarning:[m secrets should use the .age suffix by convention"
+              CLEARTEXT_FILE=$(${pkgs.mktemp}/bin/mktemp)
+              ENCRYPTED_FILE=$(${pkgs.mktemp}/bin/mktemp)
 
-        function cleanup() {
-            [[ -e ''${CLEARTEXT_FILE} ]] && rm "$CLEARTEXT_FILE"
-            [[ -e ''${ENCRYPTED_FILE} ]] && rm "$ENCRYPTED_FILE"
-        }; trap "cleanup" EXIT
+              function cleanup() {
+                  [[ -e ''${CLEARTEXT_FILE} ]] && rm "$CLEARTEXT_FILE"
+                  [[ -e ''${ENCRYPTED_FILE} ]] && rm "$ENCRYPTED_FILE"
+              }; trap "cleanup" EXIT
 
-        if [[ -e "$FILE" ]]; then
-            ${envPath} ${pkgs.rage}/bin/rage -d ${masterIdentityArgs} -o "$CLEARTEXT_FILE" "$FILE" \
-                || die "Failed to decrypt file. Aborting."
-        fi
-        shasum_before="$(sha512sum "$CLEARTEXT_FILE")"
+              if [[ -e "$FILE" ]]; then
+                  ${envPath} ${pkgs.rage}/bin/rage -d ${masterIdentityArgs} -o "$CLEARTEXT_FILE" "$FILE" \
+                      || die "Failed to decrypt file. Aborting."
+              fi
+              shasum_before="$(sha512sum "$CLEARTEXT_FILE")"
 
-        # Editor options to prevent leaking information
-        EDITOR_OPTS=()
-        case "$EDITOR" in
-            "vim"|"vim "*|nvim"|"nvim "*)
-                EDITOR_OPTS=("--cmd" 'au BufRead * setlocal history=0 nobackup nomodeline noshelltemp noswapfile noundofile nowritebackup secure viminfo=""') ;;
-            *) ;;
-        esac
-        $EDITOR ''${EDITOR_OPTS[@]} "$CLEARTEXT_FILE" \
-            || die "Editor returned unsuccessful exit status. Aborting, original is left unchanged."
+              # Editor options to prevent leaking information
+              EDITOR_OPTS=()
+              case "$EDITOR" in
+                  vim|"vim "*|nvim|"nvim "*)
+                      EDITOR_OPTS=("--cmd" 'au BufRead * setlocal history=0 nobackup nomodeline noshelltemp noswapfile noundofile nowritebackup secure viminfo=""') ;;
+                  *) ;;
+              esac
+              $EDITOR "''${EDITOR_OPTS[@]}" "$CLEARTEXT_FILE" \
+                  || die "Editor returned unsuccessful exit status. Aborting, original is left unchanged."
 
-        shasum_after="$(sha512sum "$CLEARTEXT_FILE")"
-        if [[ "$shasum_before" == "$shasum_after" ]]; then
-            echo "No content changes, original is left unchanged."
-            exit 0
-        fi
+              shasum_after="$(sha512sum "$CLEARTEXT_FILE")"
+              if [[ "$shasum_before" == "$shasum_after" ]]; then
+                  echo "No content changes, original is left unchanged."
+                  exit 0
+              fi
 
-        ${envPath} ${pkgs.rage}/bin/rage -e ${masterIdentityArgs} ${extraEncryptionPubkeys} -o "$ENCRYPTED_FILE" "$CLEARTEXT_FILE" \
-            || die "Failed to (re)encrypt edited file, original is left unchanged."
-        cp --no-preserve=all "$ENCRYPTED_FILE" "$FILE" # cp instead of mv preserves original attributes and permissions
+              ${envPath} ${pkgs.rage}/bin/rage -e ${masterIdentityArgs} ${extraEncryptionPubkeys} -o "$ENCRYPTED_FILE" "$CLEARTEXT_FILE" \
+                  || die "Failed to (re)encrypt edited file, original is left unchanged."
+              cp --no-preserve=all "$ENCRYPTED_FILE" "$FILE" # cp instead of mv preserves original attributes and permissions
 
-        exit 0
+              exit 0
       '';
   };
 }
