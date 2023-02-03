@@ -4,7 +4,7 @@
 all secrets in your repository. Typically this will be a YubiKey or a password protected age identity.
 
 What differentiates this from "classical" agenix is that your secrets will automatically be
-rekeyed only for the hosts that require it. Also the rekeyed secrets don't need to be added
+rekeyed only for the hosts that require it. additionally, they don't need to be added
 to your flake repository since they are entierly ephemeral. You can read [how it works](#how-does-it-work) below.
 
 - No need to manually keep track of which key is needed for which host (no `secrets.nix`)
@@ -20,7 +20,8 @@ Remarks:
 
 ## Installation
 
-#### Add `agenix-rekey` and define the apps
+Add `agenix-rekey` to your flake.nix, add the module to your hosts
+and let agenix-rekey define the necessary apps on your flake:
 
 ```nix
 {
@@ -29,7 +30,7 @@ Remarks:
   # also works with inputs.ragenix.url = ...;
   # ...
 
-  outputs = { self, nixpkgs, agenix, agenix-rekey }@inputs: {
+  outputs = { self, nixpkgs, agenix, agenix-rekey }: {
     # change `yourhostname` to your actual hostname
     nixosConfigurations.yourhostname = nixpkgs.lib.nixosSystem {
       # change to your system:
@@ -40,8 +41,11 @@ Remarks:
         agenix-rekey.nixosModules.default
       ];
     };
+
+    # Some initialized nixpkgs set
+    pkgs = import nixpkgs { system = "x86_64-linux"; };
     # Adds the neccessary apps so you can rekey your secrets with `nix run '.#rekey'`
-    apps."x86_64-linux" = agenix-rekey.defineApps inputs "x86_64-linux" self.nixosConfigurations;
+    apps."x86_64-linux" = agenix-rekey.defineApps self pkgs self.nixosConfigurations;
   };
 }
 ```
@@ -59,7 +63,8 @@ Defining the `rekey` apps for multiple systems
   outputs = { self, nixpkgs, agenix, agenix-rekey, flake-utils }@inputs: {
     # ... same as above
   } // flake-utils.lib.eachDefaultSystem (system: {
-    apps = agenix-rekey.defineApps inputs system self.nixosConfigurations;
+    pkgs = import nixpkgs { inherit system; };
+    apps = agenix-rekey.defineApps self pkgs self.nixosConfigurations;
   });
 }
 ```
@@ -93,10 +98,8 @@ need to be adjusted like below.
       # ...
     };
   } // flake-utils.lib.eachDefaultSystem (system: {
-    apps = let
-      inherit ((colmena.lib.makeHive self.colmena).introspect (x: x)) nodes;
-    in
-      agenix-rekey.defineApps inputs system nodes;
+    pkgs = import nixpkgs { inherit system; };
+    apps = agenix-rekey.defineApps self pkgs nodes ((colmena.lib.makeHive self.colmena).introspect (x: x)).nodes;
   });
 }
 ```

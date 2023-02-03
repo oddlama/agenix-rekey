@@ -1,8 +1,6 @@
-# TODO consolidate nixpkgs and system in to pkgs?
-self: nixpkgs: system: nixosConfigurations:
-with nixpkgs.lib; let
-  pkgs = import nixpkgs {inherit system;};
-  mkApp = { drv }: {
+self: pkgs: nixosConfigurations:
+with pkgs.lib; let
+  mkApp = {drv}: {
     type = "app";
     program = "${drv}";
   };
@@ -112,11 +110,14 @@ in rec {
   # Create/edit a secret using your $EDITOR and automatically encrypt it using your specified master identities.
   edit-secret = mkApp {
     drv = let
-      inherit (hostAttrs.config.rekey) agePlugins masterIdentities secrets;
-      # TODO warn if editing secret that isn't used
-      envPath = ''PATH="$PATH${concatMapStrings (x: ":${x}/bin") agePlugins}"'';
-      masterIdentityArgs = concatMapStrings (x: ''-i "${x}" '') masterIdentities;
-    in pkgs.writeShellScript "edit-secret" ''
+      mergedMasterIdentities = unique (concatLists (mapAttrsToList (_: x: x.config.rekey.masterIdentities or []) nixosConfigurations));
+      mergedAgePlugins = unique (concatLists (mapAttrToLists (_: x: x.config.rekey.agePlugins or []) nixosConfigurations));
+      #mergedSecrets = unique (concatLists (mapAttrsToList (_: x: mapAttrsToList (_: s: s.file) x.config.rekey.secrets) nixosConfigurations));
+
+      envPath = ''PATH="$PATH${concatMapStrings (x: ":${x}/bin") mergedAgePlugins}"'';
+      masterIdentityArgs = concatMapStrings (x: ''-i "${x}" '') mergedMasterIdentities;
+    in
+      pkgs.writeShellScript "edit-secret" ''
         set -uo pipefail
 
         function die() { echo "$*" >&2; exit 1; }
