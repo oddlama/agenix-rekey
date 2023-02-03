@@ -10,6 +10,7 @@ with lib; {
     rekeyedSecrets = import ../nix/output-derivation.nix pkgs config;
     # This pubkey is just binary 0x01 in each byte, so you can be sure there is no known private key for this
     dummyPubkey = "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3290gq";
+    isAbsolutePath = x: substring 0 1 x == "/";
   in
     mkIf (config.rekey.secrets != {}) {
       # Produce a rekeyed age secret for each of the secrets defined in rekey.secrets
@@ -23,6 +24,10 @@ with lib; {
         {
           assertion = config.rekey.masterIdentities != [];
           message = "rekey.masterIdentities must be set.";
+        }
+        {
+          assertion = all isAbsolutePath config.rekey.masterIdentities;
+          message = "All masterIdentities must be referred to by an absolute path, but (${filter isAbsolutePath config.rekey.masterIdentities}) is not.";
         }
       ];
 
@@ -68,7 +73,7 @@ with lib; {
       example = /etc/ssh/ssh_host_ed25519_key.pub;
     };
     rekey.masterIdentities = mkOption {
-      type = with types; coercedTo str toString path;
+      type = with types; listOf (coercedTo path toString str);
       description = ''
         The age identity used to decrypt your secrets. Be careful when using paths here,
         as they will be copied to the nix store. The recommended options are:
@@ -82,6 +87,20 @@ with lib; {
       '';
       default = [];
       example = [./secrets/my-public-yubikey-identity.txt];
+    };
+    rekey.extraEncryptionPubkeys = mkOption {
+      type = with types; listOf (coercedTo path toString str);
+      description = ''
+        When using `nix run '.#edit-secret' FILE`, the file will be encrypted for all identities in
+        rekey.masterIdentities by default. Here you can specify an extra set of pubkeys for which
+        all secrets should also be encrypted. This is useful in case you want to have a backup indentity
+        that must be able to decrypt all secrets but should not be used when attempting regular decryption.
+
+        If the coerced string is an absolute path, it will be used as if it was a recipient file.
+        Otherwise, the string will be interpreted as a public key.
+      '';
+      default = [];
+      example = [./backup-key.pub "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3290gq"];
     };
     rekey.agePlugins = mkOption {
       type = types.listOf types.package;

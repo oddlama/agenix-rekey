@@ -110,12 +110,23 @@ in rec {
   # Create/edit a secret using your $EDITOR and automatically encrypt it using your specified master identities.
   edit-secret = mkApp {
     drv = let
-      mergedMasterIdentities = unique (concatLists (mapAttrsToList (_: x: x.config.rekey.masterIdentities or []) nixosConfigurations));
-      mergedAgePlugins = unique (concatLists (mapAttrsToList (_: x: x.config.rekey.agePlugins or []) nixosConfigurations));
+      mergeArray = f: unique (concatLists (mapAttrsToList (_: f) nixosConfigurations));
+      mergedAgePlugins = mergeArray (x: x.config.rekey.agePlugins or []);
+      mergedMasterIdentities = mergeArray (x: x.config.rekey.masterIdentities or []);
+      mergedExtraEncryptionPubkeys = mergeArray (x: x.config.rekey.extraEncryptionPubkeys or []);
       #mergedSecrets = unique (concatLists (mapAttrsToList (_: x: mapAttrsToList (_: s: s.file) x.config.rekey.secrets) nixosConfigurations));
 
+      isAbsolutePath = x: substring 0 1 x == "/";
       envPath = ''PATH="$PATH${concatMapStrings (x: ":${x}/bin") mergedAgePlugins}"'';
       masterIdentityArgs = concatMapStrings (x: ''-i "${x}" '') mergedMasterIdentities;
+      extraEncryptionPubkeys =
+        concatMapStrings (
+          x:
+            if isAbsolutePath x
+            then ''-R "${x}" ''
+            else ''-r "${x}" ''
+        )
+        mergedExtraEncryptionPubkeys;
     in
       pkgs.writeShellScript "edit-secret" ''
         set -uo pipefail
@@ -131,8 +142,12 @@ in rec {
             echo ""
             echo 'FILE an age-encrypted file to edit or a new'
             echo '     file to create'
+            echo ""
+            echo 'age plugins: ${concatStringsSep ", " mergedAgePlugins}'
+            echo 'master identities: ${concatStringsSep ", " mergedMasterIdentities}'
+            echo 'extra encryption pubkeys: ${concatStringsSep ", " mergedExtraEncryptionPubkeys}'
         }
-        [[ $# -eq 0 || "$1" == "--help" ]] && { show_help; exit 1; }
+        [[ $# -eq 0 || "''${1-}" == "--help" || "''${2-}" == "help" ]] && { show_help; exit 1; }
 
         FILE="$1"
         CLEARTEXT_FILE=$(${pkgs.mktemp}/bin/mktemp)
@@ -158,7 +173,7 @@ in rec {
             exit 0
         fi
 
-        ${envPath} ${pkgs.rage}/bin/rage -e ${masterIdentityArgs} -o "$ENCRYPTED_FILE" "$CLEARTEXT_FILE" \
+        ${envPath} ${pkgs.rage}/bin/rage -e ${masterIdentityArgs} ${extraEncryptionPubkeys} -o "$ENCRYPTED_FILE" "$CLEARTEXT_FILE" \
             || die "Failed to (re)encrypt edited file, original is left unchanged."
         cp --no-preserve=all "$ENCRYPTED_FILE" "$FILE" # cp instead of mv preserves original attributes and permissions
 
