@@ -111,7 +111,7 @@ in rec {
   edit-secret = mkApp {
     drv = let
       mergedMasterIdentities = unique (concatLists (mapAttrsToList (_: x: x.config.rekey.masterIdentities or []) nixosConfigurations));
-      mergedAgePlugins = unique (concatLists (mapAttrToLists (_: x: x.config.rekey.agePlugins or []) nixosConfigurations));
+      mergedAgePlugins = unique (concatLists (mapAttrsToList (_: x: x.config.rekey.agePlugins or []) nixosConfigurations));
       #mergedSecrets = unique (concatLists (mapAttrsToList (_: x: mapAttrsToList (_: s: s.file) x.config.rekey.secrets) nixosConfigurations));
 
       envPath = ''PATH="$PATH${concatMapStrings (x: ":${x}/bin") mergedAgePlugins}"'';
