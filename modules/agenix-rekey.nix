@@ -5,12 +5,13 @@
   pkgs,
   ...
 }:
-with lib; {
+with lib; let
+  # This pubkey is just binary 0x01 in each byte, so you can be sure there is no known private key for this
+  dummyPubkey = "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3290gq";
+  isAbsolutePath = x: substring 0 1 x == "/";
+in {
   config = let
     rekeyedSecrets = import ../nix/output-derivation.nix pkgs config;
-    # This pubkey is just binary 0x01 in each byte, so you can be sure there is no known private key for this
-    dummyPubkey = "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3290gq";
-    isAbsolutePath = x: substring 0 1 x == "/";
   in
     mkIf (config.rekey.secrets != {}) {
       # Produce a rekeyed age secret for each of the secrets defined in rekey.secrets
