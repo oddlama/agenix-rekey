@@ -17,10 +17,11 @@ in rec {
   # The directory where rekeyed secrets are temporarily stored. Since
   tmpSecretsDir = "/tmp/agenix-rekey/${shortPersonality}";
 
+  # FIXME: This is broken. drv.drvPath does not always equal drv.outPath + ".drv".
   # Indicates whether the derivation has already been built and is available in the store.
   # Using drvPath doesn't force evaluation, which allows this to be used to show warning
   # messages in case the derivation is not built before deploying
-  isBuilt = pathExists (removeSuffix ".drv" drv.drvPath);
+  #isBuilt = pathExists (removeSuffix ".drv" drv.drvPath);
 
   # This is the derivation that copies the rekeyed secrets into the nix-store.
   # We use mkDerivation here to building this derivatoin on any system while

@@ -35,8 +35,8 @@ in {
       warnings = let
         hasGoodSuffix = x: (strings.hasSuffix ".age" x || strings.hasSuffix ".pub" x);
       in
-        optional (!rekeyedSecrets.isBuilt) ''The secrets for host ${config.networking.hostName} have not yet been rekeyed! Be sure to run `nix run ".#rekey"` after changing your secrets!''
-        ++ optional (!all hasGoodSuffix config.rekey.masterIdentities) ''
+        # optional (!rekeyedSecrets.isBuilt) ''The secrets for host ${config.networking.hostName} have not yet been rekeyed! Be sure to run `nix run ".#rekey"` after changing your secrets!''
+        optional (!all hasGoodSuffix config.rekey.masterIdentities) ''
           At least one of your rekey.masterIdentities references an unencrypted age identity in your nix store!
           ${concatMapStrings (x: "  - ${x}\n") (filter hasGoodSuffix config.rekey.masterIdentities)}
 
