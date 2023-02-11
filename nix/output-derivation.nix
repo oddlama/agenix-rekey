@@ -1,23 +1,21 @@
 hostPkgs: hostConfig:
 with hostPkgs.lib; let
-  # All secrets that the derivation will depend upon. Technically we don't need access
-  # to them, but the derivation has to be rebuilt if the secrets change.
-  secrets = mapAttrsToList (_: x: x.file) hostConfig.rekey.secrets;
   # The hash of the pubkey will be used to enforce a rebuilt when the pubkey changes.
   pubkeyHash = builtins.hashString "sha1" hostConfig.rekey.hostPubkey;
   # A predictable unique string that depends on all inputs. Used to generate
   # a unique location in /tmp which can be preseverved between invocations
-  # of rekeying and deployment.
-  personality = builtins.hashString "sha512" (toString (secrets
-    ++ (map (builtins.hashFile "sha512") secrets)
-    ++ [pubkeyHash]));
+  # of rekeying and deployment. We explicitly ignore the original location of the file,
+  # as only it's id and content are relevant.
+  personality =
+    builtins.hashString "sha512" (toString ([pubkeyHash]
+        ++ mapAttrsToList (n: v: n + ":" + builtins.hashFile "sha512" v.file) hostConfig.rekey.secrets));
   # Shortened personality truncated to 32 characters
   shortPersonality = builtins.substring 0 32 personality;
 in rec {
   # The directory where rekeyed secrets are temporarily stored. Since
   tmpSecretsDir = "/tmp/agenix-rekey/${shortPersonality}";
 
-  # FIXME: This is broken. drv.drvPath does not always equal drv.outPath + ".drv".
+  # FIXME: This would be broken. drv.drvPath does not always equal drv.outPath + ".drv".
   # Indicates whether the derivation has already been built and is available in the store.
   # Using drvPath doesn't force evaluation, which allows this to be used to show warning
   # messages in case the derivation is not built before deploying
