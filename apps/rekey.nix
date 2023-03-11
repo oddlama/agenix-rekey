@@ -1,5 +1,5 @@
-self: pkgs: nixosConfigurations:
-with pkgs.lib; let
+self: appHostPkgs: nixosConfigurations:
+with appHostPkgs.lib; let
   mkApp = {drv}: {
     type = "app";
     program = "${drv}";
@@ -8,7 +8,7 @@ in rec {
   rekey = mkApp {
     drv = let
       rekeyCommandsForHost = hostName: hostAttrs: let
-        rekeyedSecrets = import ../nix/output-derivation.nix pkgs hostAttrs.config;
+        rekeyedSecrets = import ../nix/output-derivation.nix appHostPkgs hostAttrs.config;
         inherit (rekeyedSecrets) tmpSecretsDir;
         inherit (hostAttrs.config.rekey) agePlugins hostPubkey masterIdentities secrets;
 
@@ -20,7 +20,7 @@ in rec {
         in ''
           echo "Rekeying ${secretName} (${secretAttrs.file}) for host ${hostName}"
           ${envPath} decrypt "${secretAttrs.file}" "${secretName}" "${hostName}" ${masterIdentityArgs} \
-            | ${envPath} ${pkgs.rage}/bin/rage -e -r "${hostPubkey}" -o "${secretOut}"
+            | ${envPath} ${appHostPkgs.rage}/bin/rage -e -r "${hostPubkey}" -o "${secretOut}"
         '';
       in ''
         # Remove old rekeyed secrets
@@ -31,7 +31,7 @@ in rec {
         ${concatStringsSep "\n" (mapAttrsToList rekeyCommand secrets)}
       '';
     in
-      pkgs.writeShellScript "rekey" ''
+      appHostPkgs.writeShellScript "rekey" ''
         set -euo pipefail
 
         dummy_all=0
@@ -55,7 +55,7 @@ in rec {
           # Outer loop, allows us to retry the command
           while true; do
             # Try command
-            if ${pkgs.rage}/bin/rage -d "$@" "$secret_file"; then
+            if ${appHostPkgs.rage}/bin/rage -d "$@" "$secret_file"; then
               return
             fi
 
@@ -99,10 +99,10 @@ in rec {
   rekey-save-outputs = mkApp {
     drv = let
       copyHostSecrets = hostName: hostAttrs: let
-        rekeyedSecrets = import ../nix/output-derivation.nix pkgs hostAttrs.config;
+        rekeyedSecrets = import ../nix/output-derivation.nix appHostPkgs hostAttrs.config;
       in ''echo "Stored rekeyed secrets for ${hostAttrs.config.networking.hostName} in ${rekeyedSecrets.drv}"'';
     in
-      pkgs.writeShellScript "rekey-save-outputs" ''
+      appHostPkgs.writeShellScript "rekey-save-outputs" ''
         set -euo pipefail
         ${concatStringsSep "\n" (mapAttrsToList copyHostSecrets nixosConfigurations)}
       '';
@@ -128,7 +128,7 @@ in rec {
         )
         mergedExtraEncryptionPubkeys;
     in
-      pkgs.writeShellScript "edit-secret" ''
+      appHostPkgs.writeShellScript "edit-secret" ''
         set -uo pipefail
 
         function die() { echo "[1;31merror:[m $*" >&2; exit 1; }
@@ -151,8 +151,8 @@ in rec {
 
         FILE="$1"
         [[ "$FILE" != *".age" ]] && echo "[1;33mwarning:[m secrets should use the .age suffix by convention"
-        CLEARTEXT_FILE=$(${pkgs.mktemp}/bin/mktemp)
-        ENCRYPTED_FILE=$(${pkgs.mktemp}/bin/mktemp)
+        CLEARTEXT_FILE=$(${appHostPkgs.mktemp}/bin/mktemp)
+        ENCRYPTED_FILE=$(${appHostPkgs.mktemp}/bin/mktemp)
 
         function cleanup() {
             [[ -e ''${CLEARTEXT_FILE} ]] && rm "$CLEARTEXT_FILE"
@@ -160,7 +160,7 @@ in rec {
         }; trap "cleanup" EXIT
 
         if [[ -e "$FILE" ]]; then
-            ${envPath} ${pkgs.rage}/bin/rage -d ${masterIdentityArgs} -o "$CLEARTEXT_FILE" "$FILE" \
+            ${envPath} ${appHostPkgs.rage}/bin/rage -d ${masterIdentityArgs} -o "$CLEARTEXT_FILE" "$FILE" \
                 || die "Failed to decrypt file. Aborting."
         fi
         shasum_before="$(sha512sum "$CLEARTEXT_FILE")"
@@ -181,7 +181,7 @@ in rec {
             exit 0
         fi
 
-        ${envPath} ${pkgs.rage}/bin/rage -e ${masterIdentityArgs} ${extraEncryptionPubkeys} -o "$ENCRYPTED_FILE" "$CLEARTEXT_FILE" \
+        ${envPath} ${appHostPkgs.rage}/bin/rage -e ${masterIdentityArgs} ${extraEncryptionPubkeys} -o "$ENCRYPTED_FILE" "$CLEARTEXT_FILE" \
             || die "Failed to (re)encrypt edited file, original is left unchanged."
         cp --no-preserve=all "$ENCRYPTED_FILE" "$FILE" # cp instead of mv preserves original attributes and permissions
 

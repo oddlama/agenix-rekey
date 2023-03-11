@@ -1,5 +1,5 @@
-hostPkgs: hostConfig:
-with hostPkgs.lib; let
+appHostPkgs: hostConfig:
+with appHostPkgs.lib; let
   # The hash of the pubkey will be used to enforce a rebuilt when the pubkey changes.
   pubkeyHash = builtins.hashString "sha1" hostConfig.rekey.hostPubkey;
   # A predictable unique string that depends on all inputs. Used to generate
@@ -24,7 +24,7 @@ in rec {
   # This is the derivation that copies the rekeyed secrets into the nix-store.
   # We use mkDerivation here to building this derivatoin on any system while
   # allowing the result to be system-agnostic.
-  drv = hostPkgs.stdenv.mkDerivation {
+  drv = appHostPkgs.stdenv.mkDerivation {
     name = "agenix-rekey-host-secrets";
     description = "Rekeyed secrets for host ${hostConfig.networking.hostName} (${shortPersonality})";
 

@@ -1,4 +1,4 @@
-{
+nixpkgs: {
   lib,
   options,
   config,
@@ -9,9 +9,13 @@ with lib; let
   # This pubkey is just binary 0x01 in each byte, so you can be sure there is no known private key for this
   dummyPubkey = "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3290gq";
   isAbsolutePath = x: substring 0 1 x == "/";
+  rekeyHostPkgs =
+    if config.rekey.forceRekeyOnSystem == null
+    then pkgs
+    else import nixpkgs {system = config.rekey.forceRekeyOnSystem;};
 in {
   config = let
-    rekeyedSecrets = import ../nix/output-derivation.nix pkgs config;
+    rekeyedSecrets = import ../nix/output-derivation.nix rekeyHostPkgs config;
   in
     mkIf (config.rekey.secrets != {}) {
       # Produce a rekeyed age secret for each of the secrets defined in rekey.secrets
@@ -60,6 +64,32 @@ in {
 
   options = {
     rekey.secrets = options.age.secrets;
+    rekey.forceRekeyOnSystem = mkOption {
+      type = types.nullOr types.str;
+      description = ''
+              If set, this will force that all secrets are rekeyed on a system of the given architecture.
+        This is important if you have several hosts with different architectures, since you usually
+        don't want to build the derivation containing the rekeyed secrets on a random remote host.
+
+        The problem is that each derivation will always depend on at least one specific architecture
+        (often it's bash), since it requires a builder to create it. Usually the builder will use the
+        architecture for which the package is built, which makes sense. Since it is part of the derivation
+        inputs, we have to know it in advance to predict where the output will be. If you have multiple
+        architectures, then we'd have multiple candidate derivations for the rekeyed secrets, but we want
+        a single predictable derivation.
+
+        If you would try to deploy an aarch64-linux system, but are on x86_64-linux without binary
+        emulation, then nix would have to build the rekeyed secrets using a remote builder (since the
+        derivation then requires aarch64-linux bash). This option will override the pkgs set passed to
+        the derivation such that it will use a builder of the specified architecture instead. This way
+        you can force it to always require a x86_64-linux bash, thus allowing your local system to build it.
+
+        The "automatic" and nice way would be to set this to builtins.currentSystem, but that would
+        also be impure, so unfortunately you have to hardcode this option.
+      '';
+      default = null;
+      example = "x86_64-linux";
+    };
     rekey.hostPubkey = mkOption {
       type = with types; coercedTo path readFile str;
       description = ''
@@ -105,7 +135,7 @@ in {
     };
     rekey.agePlugins = mkOption {
       type = types.listOf types.package;
-      default = [pkgs.age-plugin-yubikey];
+      default = [rekeyHostPkgs.age-plugin-yubikey];
       description = ''
         A list of plugins that should be available to rage while rekeying.
         They will be added to the PATH before rage is invoked.
