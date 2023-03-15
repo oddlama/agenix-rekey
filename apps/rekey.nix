@@ -162,6 +162,9 @@ in rec {
         if [[ -e "$FILE" ]]; then
             ${envPath} ${appHostPkgs.rage}/bin/rage -d ${masterIdentityArgs} -o "$CLEARTEXT_FILE" "$FILE" \
                 || die "Failed to decrypt file. Aborting."
+        else
+            mkdir -p "$(dirname "$FILE")" \
+                || die "Could not create parent directory"
         fi
         shasum_before="$(sha512sum "$CLEARTEXT_FILE")"
 
