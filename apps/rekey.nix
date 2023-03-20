@@ -14,7 +14,7 @@ in rec {
 
         # Collect paths to enabled age plugins for this host
         envPath = ''PATH="$PATH${concatMapStrings (x: ":${x}/bin") agePlugins}"'';
-        masterIdentityArgs = concatMapStrings (x: ''-i "${x}" '') masterIdentities;
+        masterIdentityArgs = concatMapStrings (x: ''-i ${escapeShellArg x} '') masterIdentities;
         rekeyCommand = secretName: secretAttrs: let
           secretOut = "${tmpSecretsDir}/${secretName}.age";
         in ''
@@ -118,13 +118,13 @@ in rec {
 
       isAbsolutePath = x: substring 0 1 x == "/";
       envPath = ''PATH="$PATH${concatMapStrings (x: ":${x}/bin") mergedAgePlugins}"'';
-      masterIdentityArgs = concatMapStrings (x: ''-i "${x}" '') mergedMasterIdentities;
+      masterIdentityArgs = concatMapStrings (x: ''-i ${escapeShellArg x} '') mergedMasterIdentities;
       extraEncryptionPubkeys =
         concatMapStrings (
           x:
             if isAbsolutePath x
-            then ''-R "${x}" ''
-            else ''-r "${x}" ''
+            then ''-R ${escapeShellArg x} ''
+            else ''-r ${escapeShellArg x} ''
         )
         mergedExtraEncryptionPubkeys;
     in
