@@ -1,24 +1,23 @@
 # agenix-rekey
 
 `agenix-rekey` is an extension for [agenix](https://github.com/ryantm/agenix) which facilitates using a YubiKey
-or a master age identity to manage all secrets in your repository.
+(or just a master age identity) to store all secrets in your repository, which can be especially useful for
+flakes that manage multiple hosts. This is what you get from using it:
 
-What differentiates this from "classical" agenix is that your secrets will automatically be
-rekeyed only for the hosts that require it, and replaces writing any form of `secrets.nix`.
-All required information for encryption and decryption will be deduced from your flake.
-Additionally, rekeyed secrets never have to be added to your flake repository.
-You can read more about [how it works](#how-does-it-work) below. A short summary:
+- **Single master-key.** Anything in your repository is encrypted by your master YubiKey or age identity.
+- **Host-key deduction.** No need to manually keep track of which key is needed for which host - no `secrets.nix`.
+- **Less secret management.** Rekeyed secrets never have to be added to your flake repository, thus
+  you only have to keep track of the actual secret. Also a leaked host-key doesn't allow an attacker to decrypt
+  older checked-in secrets, in case your repo is public.
+- **Lazy rekeying.** Rekeying only has to be done if necessary, results are cached in a derivation. If a new secret is added
+  or a host key is changed, you will automatically be prompted to rekey your secrets.
+- **Simplified bootstrapping.** Automatic rekeying will use a dummy pubkey for unknown target hosts,
+  so you can bootstrap a new system for which the pubkey isn't yet known. (Runtime decryption will just fail)
 
-- No need to manually keep track of which key is needed for which host (no `secrets.nix`)
-- Rekeyed secrets never have to be added to your flake repository, thus
-  a leaked host-key doesn't allow an attacker to decrypt your secrets if your repo is public
-- Rekeying will automatically use a dummy pubkey for new hosts,
-  so you can bootstrap a new system for which the pubkey isn't yet known.
+You can read more about [how it works](#how-does-it-work) below. Remarks:
 
-Remarks:
-
-- Currently `age-plugin-yubikey` requires the PIN for each decryption. This will be fixed in their next release (>0.3.2).
-- Using a password protected master key will always require the password for each rekeying operation. There's no way around that without caching the key, which is currently not done.
+- Currently `age-plugin-yubikey` requires the PIN for each decryption. This will be fixed in their next release (>0.3.2). You can manually build it with `cargo build` to get that feature now.
+  Using a password protected master key will never have this benefit, and the password will alwas be required for each rekeying operation. There's no way around that without caching the key, which I didn't want to do.
 
 ## Installation
 
