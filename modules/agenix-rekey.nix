@@ -67,7 +67,7 @@ in {
     rekey.forceRekeyOnSystem = mkOption {
       type = types.nullOr types.str;
       description = ''
-              If set, this will force that all secrets are rekeyed on a system of the given architecture.
+        If set, this will force that all secrets are rekeyed on a system of the given architecture.
         This is important if you have several hosts with different architectures, since you usually
         don't want to build the derivation containing the rekeyed secrets on a random remote host.
 
@@ -96,25 +96,39 @@ in {
         The age public key to use as a recipient when rekeying. This either has to be the
         path to an age public key file, or the public key itself in string form.
 
+        If you are managing a single host only, you can use `"/etc/ssh/ssh_host_ed25519_key.pub"`
+        here to allow the rekey app to directly read your pubkey from your system.
+
+        If you are managing multiple hosts, it's recommended to either store a copy of each
+        host's pubkey in your flake and use refer to those here `./secrets/host1-pubkey.pub`,
+        or directly set the host's pubkey here by specifying `"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI..."`.
+
         Make sure to NEVER use a private key here, as it will end up in the public nix store!
       '';
       default = dummyPubkey;
       #example = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI.....";
       #example = "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3290gq";
-      example = /etc/ssh/ssh_host_ed25519_key.pub;
+      example = literalExpression "/etc/ssh/ssh_host_ed25519_key.pub";
     };
     rekey.masterIdentities = mkOption {
       type = with types; listOf (coercedTo path toString str);
       description = ''
-        The age identity used to decrypt your secrets. Be careful when using paths here,
-        as they will be copied to the nix store. The recommended options are:
+        The list of age identities that will be presented to `rage` when decrypting the stored secrets
+        to rekey them for your host(s). If multiple identities are given, they will be tried in-order.
+
+        The recommended options are:
 
         - Use a split-identity ending in `.pub`, where the private part is not contained (a yubikey identity)
         - Use an absolute path to your key outside of the nix store ("/home/myuser/age-master-key")
         - Or encrypt your age identity and use the extension `.age`. You can encrypt an age identity
           using `rage -p -o privkey.age privkey` which protects it in your store.
 
-        All identities given here will be passed to age, which will consider them for decryption in this order.
+        If you are using YubiKeys, you can specify multiple split-identities here and use them interchangeably.
+        You will have the option to skip any YubiKeys that are not available to you in that moment.
+
+        Be careful when using paths here, as they will be copied to the nix store. Using
+        split-identities is fine, but if you are using plain age identities, make sure that they
+        are password protected.
       '';
       default = [];
       example = [./secrets/my-public-yubikey-identity.txt];
@@ -138,7 +152,9 @@ in {
       default = [rekeyHostPkgs.age-plugin-yubikey];
       description = ''
         A list of plugins that should be available to rage while rekeying.
-        They will be added to the PATH before rage is invoked.
+        They will be added to the PATH with lowest-priority before rage is invoked,
+        meaning if you have the plugin installed on your system, that one is preferred
+        in an effort to not break complex setups (e.g. WSL passthrough).
       '';
     };
   };
