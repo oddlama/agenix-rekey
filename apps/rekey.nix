@@ -10,7 +10,9 @@ in rec {
       rekeyCommandsForHost = hostName: hostAttrs: let
         rekeyedSecrets = import ../nix/output-derivation.nix appHostPkgs hostAttrs.config;
         inherit (rekeyedSecrets) tmpSecretsDir;
-        inherit (hostAttrs.config.rekey) agePlugins hostPubkey masterIdentities secrets;
+        inherit (hostAttrs.config.rekey) agePlugins masterIdentities secrets;
+		hostPubkey = removeSuffix "\n" hostAttrs.config.rekey.hostPubkey;
+		hostPubkeyOpt = if builtins.substring 0 1 hostPubkey == "/" then "-R" else "-r";
 
         # Collect paths to enabled age plugins for this host
         envPath = ''PATH="$PATH${concatMapStrings (x: ":${x}/bin") agePlugins}"'';
@@ -20,7 +22,7 @@ in rec {
         in ''
           echo "Rekeying ${secretName} (${secretAttrs.file}) for host ${hostName}"
           ${envPath} decrypt "${secretAttrs.file}" "${secretName}" "${hostName}" ${masterIdentityArgs} \
-            | ${envPath} ${appHostPkgs.rage}/bin/rage -e -r "${hostPubkey}" -o "${secretOut}"
+            | ${envPath} ${appHostPkgs.rage}/bin/rage -e ${hostPubkeyOpt} ${escapeShellArg hostPubkey} -o "${secretOut}"
         '';
       in ''
         # Remove old rekeyed secrets

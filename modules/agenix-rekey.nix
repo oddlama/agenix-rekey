@@ -91,7 +91,7 @@ in {
       example = "x86_64-linux";
     };
     rekey.hostPubkey = mkOption {
-      type = with types; coercedTo path readFile str;
+      type = with types; coercedTo path (x: if isPath x then readFile x else x) str;
       description = ''
         The age public key to use as a recipient when rekeying. This either has to be the
         path to an age public key file, or the public key itself in string form.

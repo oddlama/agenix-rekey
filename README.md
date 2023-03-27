@@ -238,7 +238,7 @@ also be impure, so unfortunately you have to hardcode this option.
 
 ## `rekey.hostPubkey`
 
-| Type    | `coercedTo path readFile str` |
+| Type    | `coercedTo path (x: if isPath x then readFile x else x) str` |
 |-----|-----|
 | Default | `"age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3290gq"` |
 | Example | `"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI....."` |
