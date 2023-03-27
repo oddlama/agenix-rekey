@@ -108,7 +108,7 @@ in {
       default = dummyPubkey;
       #example = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI.....";
       #example = "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3290gq";
-      example = literalExpression "/etc/ssh/ssh_host_ed25519_key.pub";
+      example = "/etc/ssh/ssh_host_ed25519_key.pub";
     };
     rekey.masterIdentities = mkOption {
       type = with types; listOf (coercedTo path toString str);
