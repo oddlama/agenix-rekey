@@ -188,7 +188,7 @@ in the nix-store, which we want to achieve without requiring you to track them i
 which you can invoke with `nix run '.#rekey'` whenever your secrets need to be rekeyed.
 This script will run in your host-environment and thus is able to prompt for passwords
 or read YubiKeys. It therefore can run `age` to rekey the secrets and since it still
-has access to your host configurations in your flake, it can stil access all necessary information.
+has access to your host configurations in your flake, it can still access all necessary information.
 
 #### Predicting store paths to avoid tracking rekeyed secrets
 
