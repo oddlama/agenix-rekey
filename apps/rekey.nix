@@ -11,8 +11,8 @@ in rec {
         rekeyedSecrets = import ../nix/output-derivation.nix appHostPkgs hostAttrs.config;
         inherit (rekeyedSecrets) tmpSecretsDir;
         inherit (hostAttrs.config.rekey) agePlugins masterIdentities secrets;
-		hostPubkey = removeSuffix "\n" hostAttrs.config.rekey.hostPubkey;
-		hostPubkeyOpt = if builtins.substring 0 1 hostPubkey == "/" then "-R" else "-r";
+        hostPubkey = removeSuffix "\n" hostAttrs.config.rekey.hostPubkey;
+        hostPubkeyOpt = if builtins.substring 0 1 hostPubkey == "/" then "-R" else "-r";
 
         # Collect paths to enabled age plugins for this host
         envPath = ''PATH="$PATH${concatMapStrings (x: ":${x}/bin") agePlugins}"'';
