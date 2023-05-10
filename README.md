@@ -18,8 +18,8 @@ flakes that manage multiple hosts. This is what you get from using it:
 
 You can read more about [how it works](#how-does-it-work) below. Remarks:
 
-- Currently `age-plugin-yubikey` requires the PIN for each decryption. This will be fixed in their next release (>0.3.2). You can manually build it with `cargo build` to get that feature now.
-  Using a password protected master key will never have this benefit, and the password will alwas be required for each rekeying operation. There's no way around that without caching the key, which I didn't want to do.
+- Since `age-plugin-yubikey` 0.4.0 the PIN is required only once. Using a password protected master key will never
+  have this benefit, and the password will alwas be required for each rekeying operation. There's no way around that without caching the key, which I didn't want to do.
 
 ## Installation
 
