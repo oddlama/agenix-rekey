@@ -21,8 +21,10 @@ in rec {
           secretOut = "${tmpSecretsDir}/${secretName}.age";
         in ''
           echo "Rekeying ${secretName} (${secretAttrs.file}) for host ${hostName}"
-          ${envPath} decrypt "${secretAttrs.file}" "${secretName}" "${hostName}" ${masterIdentityArgs} \
-            | ${envPath} ${appHostPkgs.rage}/bin/rage -e ${hostPubkeyOpt} ${escapeShellArg hostPubkey} -o "${secretOut}"
+          if ! ${envPath} decrypt "${secretAttrs.file}" "${secretName}" "${hostName}" ${masterIdentityArgs} \
+            | ${envPath} ${appHostPkgs.rage}/bin/rage -e ${hostPubkeyOpt} ${escapeShellArg hostPubkey} -o "${secretOut}"; then
+            echo "[1;31mFailed to encrypt ${secretOut} for ${hostName}![m" >&2
+          fi
         '';
       in ''
         # Remove old rekeyed secrets
