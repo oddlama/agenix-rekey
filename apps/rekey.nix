@@ -8,20 +8,27 @@ in rec {
   rekey = mkApp {
     drv = let
       rekeyCommandsForHost = hostName: hostAttrs: let
+        inherit (hostAttrs.config.age.rekey) agePlugins masterIdentities;
+        # The derivation containing the resulting rekeyed secrets
         rekeyedSecrets = import ../nix/output-derivation.nix appHostPkgs hostAttrs.config;
+        # We need to know where this derivation expects the rekeyed secrets to be stored
         inherit (rekeyedSecrets) tmpSecretsDir;
-        inherit (hostAttrs.config.rekey) agePlugins masterIdentities secrets;
-        hostPubkey = removeSuffix "\n" hostAttrs.config.rekey.hostPubkey;
+        # All secrets that have rekeyFile set. These will be rekeyed.
+        secretsToRekey = filterAttrs (_: v: v.rekeyFile != null) hostAttrs.config.age.secrets;
+        # Create the recipient argument that will be passed to rage
+        hostPubkey = removeSuffix "\n" hostAttrs.config.age.rekey.hostPubkey;
         hostPubkeyOpt = if builtins.substring 0 1 hostPubkey == "/" then "-R" else "-r";
 
         # Collect paths to enabled age plugins for this host
         envPath = ''PATH="$PATH${concatMapStrings (x: ":${x}/bin") agePlugins}"'';
+        # The identities which can decrypt the existing secrets need to be passed to rage
         masterIdentityArgs = concatMapStrings (x: ''-i ${escapeShellArg x} '') masterIdentities;
+        # Finally, the command that rekeys a given secret.
         rekeyCommand = secretName: secretAttrs: let
           secretOut = "${tmpSecretsDir}/${secretName}.age";
         in ''
-          echo "Rekeying ${secretName} (${secretAttrs.file}) for host ${hostName}"
-          if ! ${envPath} decrypt "${secretAttrs.file}" "${secretName}" "${hostName}" ${masterIdentityArgs} \
+          echo "Rekeying ${secretName} (${secretAttrs.rekeyFile}) for host ${hostName}"
+          if ! ${envPath} decrypt "${secretAttrs.rekeyFile}" "${secretName}" "${hostName}" ${masterIdentityArgs} \
             | ${envPath} ${appHostPkgs.rage}/bin/rage -e ${hostPubkeyOpt} ${escapeShellArg hostPubkey} -o "${secretOut}"; then
             echo "[1;31mFailed to encrypt ${secretOut} for ${hostName}![m" >&2
           fi
@@ -32,7 +39,7 @@ in rec {
         mkdir -p "${tmpSecretsDir}"
 
         # Rekey secrets for this host
-        ${concatStringsSep "\n" (mapAttrsToList rekeyCommand secrets)}
+        ${concatStringsSep "\n" (mapAttrsToList rekeyCommand secretsToRekey)}
       '';
     in
       appHostPkgs.writeShellScript "rekey" ''
@@ -63,7 +70,7 @@ in rec {
               return
             fi
 
-            echo "[1;31mFailed to decrypt rekey.secrets.$secret_name ($secret_file) for $hostname![m" >&2
+            echo "[1;31mFailed to decrypt age.secrets.$secret_name.rekeyFile ($secret_file) for $hostname![m" >&2
             while true; do
               if [[ "$dummy_all" == "true" ]]; then
                 response=d
@@ -84,7 +91,7 @@ in rec {
                   ;;
                 a) dummy_all=true ;&
                 d|dummy)
-                  echo "This is a dummy replacement value. The actual secret rekey.secrets.$secret_name ($secret_file) could not be decrypted."
+                  echo "This is a dummy replacement value. The actual secret age.secrets.$secret_name.rekeyFile ($secret_file) could not be decrypted."
                   return
                   ;;
                 *) ;;
@@ -96,17 +103,17 @@ in rec {
         ${concatStringsSep "\n" (mapAttrsToList rekeyCommandsForHost nixosConfigurations)}
         # Pivot to another script that has /tmp available in its sandbox
         # and is impure in case the master key is located elsewhere on the system
-        nix run --extra-sandbox-paths /tmp --impure "${self.outPath}#rekey-save-outputs";
+        nix run --extra-sandbox-paths /tmp --impure "${self.outPath}#_rekey-save-outputs";
       '';
   };
   # Internal app that rekey pivots into. Do not call manually.
-  rekey-save-outputs = mkApp {
+  _rekey-save-outputs = mkApp {
     drv = let
       copyHostSecrets = hostName: hostAttrs: let
         rekeyedSecrets = import ../nix/output-derivation.nix appHostPkgs hostAttrs.config;
       in ''echo "Stored rekeyed secrets for ${hostAttrs.config.networking.hostName} in ${rekeyedSecrets.drv}"'';
     in
-      appHostPkgs.writeShellScript "rekey-save-outputs" ''
+      appHostPkgs.writeShellScript "_rekey-save-outputs" ''
         set -euo pipefail
         ${concatStringsSep "\n" (mapAttrsToList copyHostSecrets nixosConfigurations)}
       '';
@@ -115,10 +122,11 @@ in rec {
   edit-secret = mkApp {
     drv = let
       mergeArray = f: unique (concatLists (mapAttrsToList (_: f) nixosConfigurations));
-      mergedAgePlugins = mergeArray (x: x.config.rekey.agePlugins or []);
-      mergedMasterIdentities = mergeArray (x: x.config.rekey.masterIdentities or []);
-      mergedExtraEncryptionPubkeys = mergeArray (x: x.config.rekey.extraEncryptionPubkeys or []);
-      #mergedSecrets = unique (concatLists (mapAttrsToList (_: x: mapAttrsToList (_: s: s.file) x.config.rekey.secrets) nixosConfigurations));
+      mergedAgePlugins = mergeArray (x: x.config.age.rekey.agePlugins or []);
+      mergedMasterIdentities = mergeArray (x: x.config.age.rekey.masterIdentities or []);
+      mergedExtraEncryptionPubkeys = mergeArray (x: x.config.age.rekey.extraEncryptionPubkeys or []);
+      # TODO fzf selection
+      #mergedSecrets = unique (concatLists (mapAttrsToList (_: x: mapAttrsToList (_: s: s.rekeyFile) x.config.age.rekey.secrets) nixosConfigurations));
 
       isAbsolutePath = x: substring 0 1 x == "/";
       envPath = ''PATH="$PATH${concatMapStrings (x: ":${x}/bin") mergedAgePlugins}"'';
