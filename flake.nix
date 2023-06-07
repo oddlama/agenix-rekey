@@ -8,6 +8,6 @@
   }: {
     nixosModules.agenixRekey = import ./modules/agenix-rekey.nix nixpkgs;
     nixosModules.default = self.nixosModules.agenixRekey;
-    defineApps = import ./apps/rekey.nix;
+    defineApps = import ./apps;
   };
 }
