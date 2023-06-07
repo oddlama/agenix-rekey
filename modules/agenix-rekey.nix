@@ -4,8 +4,31 @@ nixpkgs: {
   config,
   pkgs,
   ...
-}:
-with lib; let
+}: let
+  inherit
+    (lib)
+    all
+    concatMapStrings
+    filter
+    flatten
+    flip
+    hasSuffix
+    isPath
+    mapAttrs
+    mapAttrs'
+    mapAttrsToList
+    mdDoc
+    mkIf
+    mkOption
+    mkRenamedOptionModule
+    nameValuePair
+    optional
+    readFile
+    showOptionWithDefLocs
+    substring
+    types
+    ;
+
   # This pubkey is just binary 0x01 in each byte, so you can be sure there is no known private key for this
   dummyPubkey = "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3290gq";
   isAbsolutePath = x: substring 0 1 x == "/";
@@ -37,7 +60,7 @@ in {
       ));
 
     warnings = let
-      hasGoodSuffix = x: (strings.hasSuffix ".age" x || strings.hasSuffix ".pub" x);
+      hasGoodSuffix = x: (hasSuffix ".age" x || hasSuffix ".pub" x);
     in
       # optional (!rekeyedSecrets.isBuilt) ''The secrets for host ${config.networking.hostName} have not yet been rekeyed! Be sure to run `nix run .#rekey` after changing your secrets!''
       optional (!all hasGoodSuffix config.age.rekey.masterIdentities) ''
