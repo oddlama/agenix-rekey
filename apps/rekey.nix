@@ -1,5 +1,17 @@
-self: appHostPkgs: nixosConfigurations:
-with appHostPkgs.lib; let
+self: appHostPkgs: nixosConfigurations: let
+  inherit
+    (appHostPkgs.lib)
+    concatLists
+    concatMapStrings
+    concatStringsSep
+    escapeShellArg
+    filterAttrs
+    mapAttrsToList
+    removeSuffix
+    substring
+    unique
+    ;
+
   mkApp = {drv}: {
     type = "app";
     program = "${drv}";

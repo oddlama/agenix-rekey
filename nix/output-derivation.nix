@@ -1,16 +1,28 @@
-appHostPkgs: hostConfig:
-with appHostPkgs.lib; let
+appHostPkgs: hostConfig: let
+  inherit
+    (appHostPkgs.lib)
+    filterAttrs
+    mapAttrsToList
+    substring
+    ;
+
+  inherit
+    (builtins)
+    hashFile
+    hashString
+    ;
+
   # The hash of the pubkey will be used to enforce a rebuilt when the pubkey changes.
-  pubkeyHash = builtins.hashString "sha1" hostConfig.age.rekey.hostPubkey;
+  pubkeyHash = hashString "sha1" hostConfig.age.rekey.hostPubkey;
   # A predictable unique string that depends on all inputs. Used to generate
   # a unique location in /tmp which can be preseverved between invocations
   # of rekeying and deployment. We explicitly ignore the original location of the file,
   # as only it's id and content are relevant.
-  personality = builtins.hashString "sha512" (toString ([pubkeyHash]
-    ++ mapAttrsToList (n: v: n + ":" + builtins.hashFile "sha512" v.rekeyFile)
+  personality = hashString "sha512" (toString ([pubkeyHash]
+    ++ mapAttrsToList (n: v: n + ":" + hashFile "sha512" v.rekeyFile)
     (filterAttrs (_: v: v.rekeyFile != null) hostConfig.age.secrets)));
   # Shortened personality truncated to 32 characters
-  shortPersonality = builtins.substring 0 32 personality;
+  shortPersonality = substring 0 32 personality;
 in rec {
   # The directory where rekeyed secrets are temporarily stored. Since
   tmpSecretsDir = "/tmp/agenix-rekey/${shortPersonality}";

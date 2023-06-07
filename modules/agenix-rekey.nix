@@ -98,17 +98,6 @@ in {
     }: {
       options.rekey.secrets = options.age.secrets // {visible = false;};
       config = {
-        #assertions = flip mapAttrsToList config.rekey.secrets (secretName: secretCfg:
-        #  let
-        #    secretOpts = (options.rekey.secrets.type.functor.wrapped.getSubOptions secretCfg);
-        #  in
-        #    {
-        #      assertion = secretCfg.rekeyFile != null -> length secretOpts.file.definitions == 1;
-        #      message = ''
-        #        `rekeyFile` is used for this secret, but there are conflicting `file` definitions:
-        #        ${showOptionWithDefLocs secretOpts.file}'';
-        #    };
-
         warnings = optional (config.rekey.secrets != {}) ''
           The option `rekey.secrets` has been integrated into `age.secrets`.
           Generally, the new option specification is the compatible with the old one,
