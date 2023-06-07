@@ -133,7 +133,10 @@ For new installations, the setup process will be the following:
    which allows you to edit/create secrets using your favorite `$EDITOR`, and automatically uses the correct identities for de- and encryption.
 
     ```bash
+    # Create new or edit existing secret
     nix run ".#edit-secret" secret1.age
+    # Or encrypt an existing file
+    nix run ".#edit-secret" -i plain.txt secret1.age
 
     # Alternatively you can encrypt something manually using (r)age
     echo "secret" | rage -e -i ./your-yubikey-identity.pub > secret1.age

@@ -142,28 +142,52 @@ in rec {
             echo "nix run '.#edit-secret' FILE"
             echo ""
             echo 'options:'
-            echo '-h, --help                show help'
+            echo '-h, --help                Show help'
+            echo '-i, --input INFILE        Instead of editing FILE with $EDITOR, directly use the'
+            echo '                            content of INFILE and encrypt it to FILE.'
             echo ""
-            echo 'FILE an age-encrypted file to edit or a new'
-            echo '     file to create'
+            echo 'FILE    An age-encrypted file to edit or a new file to create.'
             echo ""
             echo 'age plugins: ${concatStringsSep ", " mergedAgePlugins}'
             echo 'master identities: ${concatStringsSep ", " mergedMasterIdentities}'
             echo 'extra encryption pubkeys: ${concatStringsSep ", " mergedExtraEncryptionPubkeys}'
         }
-        [[ $# -eq 0 || "''${1-}" == "--help" || "''${2-}" == "help" ]] && { show_help; exit 1; }
 
-        FILE="$1"
+        POSITIONAL_ARGS=()
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                "help"|"--help"|"-help"|"-h")
+                    show_help
+                    exit 1
+                    ;;
+                "--input"|"-i")
+                    INFILE="$2"
+                    [[ -f "$INFILE" ]] || die "Input file not found: '$INFILE'"
+                    shift
+                    ;;
+                "--") break ;;
+                "-"*|"--"*) die "Invalid option '$1'" ;;
+                *) POSITIONAL_ARGS+=("$1") ;;
+            esac
+            shift
+        done
+
+        # Ensure file is given
+        [[ ''${#POSITIONAL_ARGS[@]} -eq 1 ]] || { show_help; exit 1; }
+        FILE="''${POSITIONAL_ARGS[0]}"
         [[ "$FILE" != *".age" ]] && echo "[1;33mwarning:[m secrets should use the .age suffix by convention"
+
         CLEARTEXT_FILE=$(${appHostPkgs.mktemp}/bin/mktemp)
         ENCRYPTED_FILE=$(${appHostPkgs.mktemp}/bin/mktemp)
 
         function cleanup() {
-            [[ -e ''${CLEARTEXT_FILE} ]] && rm "$CLEARTEXT_FILE"
-            [[ -e ''${ENCRYPTED_FILE} ]] && rm "$ENCRYPTED_FILE"
+            [[ -e "$CLEARTEXT_FILE" ]] && rm "$CLEARTEXT_FILE"
+            [[ -e "$ENCRYPTED_FILE" ]] && rm "$ENCRYPTED_FILE"
         }; trap "cleanup" EXIT
 
         if [[ -e "$FILE" ]]; then
+            [[ -z ''${INFILE+x} ]] || die "Refusing to overwrite existing file when using --input"
+
             ${envPath} ${appHostPkgs.rage}/bin/rage -d ${masterIdentityArgs} -o "$CLEARTEXT_FILE" "$FILE" \
                 || die "Failed to decrypt file. Aborting."
         else
@@ -172,15 +196,19 @@ in rec {
         fi
         shasum_before="$(sha512sum "$CLEARTEXT_FILE")"
 
-        # Editor options to prevent leaking information
-        EDITOR_OPTS=()
-        case "$EDITOR" in
-            vim|"vim "*|nvim|"nvim "*)
-                EDITOR_OPTS=("--cmd" 'au BufRead * setlocal history=0 nobackup nomodeline noshelltemp noswapfile noundofile nowritebackup secure viminfo=""') ;;
-            *) ;;
-        esac
-        $EDITOR "''${EDITOR_OPTS[@]}" "$CLEARTEXT_FILE" \
-            || die "Editor returned unsuccessful exit status. Aborting, original is left unchanged."
+        if [[ -n ''${INFILE+x} ]] ; then
+            cp "$INFILE" "$CLEARTEXT_FILE"
+        else
+          # Editor options to prevent leaking information
+          EDITOR_OPTS=()
+          case "$EDITOR" in
+              vim|"vim "*|nvim|"nvim "*)
+                  EDITOR_OPTS=("--cmd" 'au BufRead * setlocal history=0 nobackup nomodeline noshelltemp noswapfile noundofile nowritebackup secure viminfo=""') ;;
+              *) ;;
+          esac
+          $EDITOR "''${EDITOR_OPTS[@]}" "$CLEARTEXT_FILE" \
+              || die "Editor returned unsuccessful exit status. Aborting, original is left unchanged."
+        fi
 
         shasum_after="$(sha512sum "$CLEARTEXT_FILE")"
         if [[ "$shasum_before" == "$shasum_after" ]]; then
