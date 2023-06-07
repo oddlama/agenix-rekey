@@ -46,7 +46,7 @@ in rec {
       mkdir -p "$out"
       # Ensure that the rekey command has already been executed.
       [[ -e "/${tmpSecretsDir}" ]] \
-        || { echo "[1;31mNo rekeyed secrets were found, please (re)execute \`nix run \".#rekey\"\`.[m" >&2; exit 1; }
+        || { echo "[1;31mNo rekeyed secrets were found, please (re)execute \`nix run .#rekey\`.[m" >&2; exit 1; }
       cp -r "${tmpSecretsDir}/." "$out"
     '';
   };

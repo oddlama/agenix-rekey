@@ -39,7 +39,7 @@ in {
     warnings = let
       hasGoodSuffix = x: (strings.hasSuffix ".age" x || strings.hasSuffix ".pub" x);
     in
-      # optional (!rekeyedSecrets.isBuilt) ''The secrets for host ${config.networking.hostName} have not yet been rekeyed! Be sure to run `nix run ".#rekey"` after changing your secrets!''
+      # optional (!rekeyedSecrets.isBuilt) ''The secrets for host ${config.networking.hostName} have not yet been rekeyed! Be sure to run `nix run .#rekey` after changing your secrets!''
       optional (!all hasGoodSuffix config.age.rekey.masterIdentities) ''
         At least one of your rekey.masterIdentities references an unencrypted age identity in your nix store!
         ${concatMapStrings (x: "  - ${x}\n") (filter hasGoodSuffix config.age.rekey.masterIdentities)}
@@ -122,12 +122,15 @@ in {
             type = types.nullOr types.path;
             default = null;
             description = mdDoc ''
-              The path to the master-key encrypted .age file for this secret.
-              This secret will be rekeyed for the host using it, and the resulting
-              host specific age file will be set as `file`, so this is mutually exclusive
-              with specifying `file`.
+              The path to the encrypted .age file for this secret. The file must
+              be encrypted with one of the given `age.rekey.masterIdentities` and not with
+              a host-specific key.
 
-              If you want skip having a secrets.nix file and only use rekeyed secrets,
+              This secret will automatically be rekeyed for hosts that use it, and the resulting
+              host-specific .age file will be set as actual `file` attribute. So naturally this
+              is mutually exclusive with specifying `file` directly.
+
+              If you want to avoid having a `secrets.nix` file and only use rekeyed secrets,
               you should always use this option instead of `file`.
             '';
           };
@@ -217,7 +220,7 @@ in {
       extraEncryptionPubkeys = mkOption {
         type = with types; listOf (coercedTo path toString str);
         description = mdDoc ''
-          When using `nix run '.#edit-secret' FILE`, the file will be encrypted for all identities in
+          When using `nix run .#edit-secret FILE`, the file will be encrypted for all identities in
           rekey.masterIdentities by default. Here you can specify an extra set of pubkeys for which
           all secrets should also be encrypted. This is useful in case you want to have a backup indentity
           that must be able to decrypt all secrets but should not be used when attempting regular decryption.

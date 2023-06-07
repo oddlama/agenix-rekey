@@ -150,7 +150,7 @@ in rec {
         function show_help() {
           echo 'app edit-secret - create/edit age secret files with $EDITOR'
           echo ""
-          echo "nix run '.#edit-secret' FILE"
+          echo "nix run .#edit-secret FILE"
           echo ""
           echo 'options:'
           echo '-h, --help                Show help'

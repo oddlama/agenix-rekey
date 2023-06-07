@@ -2,6 +2,17 @@
 
 # agenix-rekey
 
+<!--`agenix-rekey` is an extension for [agenix](https://github.com/ryantm/agenix).
+It mainly allows you to get rid of having to maintain a `secrets.nix` file
+You encrypt and store all secrets with your master key, and agenix-rekey
+automatically re-encrypts the secrets for any host that uses it.
+
+
+facilitates using a YubiKey
+(or just a master age identity) to store all secrets in your repository, which can be especially useful for
+flakes that manage multiple hosts. This is what you get from using it:
+-->
+
 `agenix-rekey` is an extension for [agenix](https://github.com/ryantm/agenix) which facilitates using a YubiKey
 (or just a master age identity) to store all secrets in your repository, which can be especially useful for
 flakes that manage multiple hosts. This is what you get from using it:
@@ -47,7 +58,7 @@ and let agenix-rekey define the necessary apps on your flake:
 
     # Some initialized nixpkgs set
     pkgs = import nixpkgs { system = "x86_64-linux"; };
-    # Adds the neccessary apps so you can rekey your secrets with `nix run '.#rekey'`
+    # Adds the neccessary apps so you can rekey your secrets with `nix run .#rekey`
     apps."x86_64-linux" = agenix-rekey.defineApps self pkgs self.nixosConfigurations;
   };
 }
@@ -111,8 +122,8 @@ need to be adjusted like below.
 
 ## Usage
 
-Since agenix-rekey is just a small extension, everything you know about agenix still applies as usual.
-Its mainly the setup that has fewer steps. Look below for instructions on adapting an existing config.
+Since agenix-rekey is just an extension, everything you know about agenix still applies as usual.
+Look below for instructions on adapting an existing config.
 For new installations, the setup process will be the following:
 
 1. For each host you have to provide a pubkey for rekeying and select the master identity
@@ -120,12 +131,14 @@ For new installations, the setup process will be the following:
 
     ```nix
     {
-      # Obtain this using `ssh-keyscan` or by looking it up in your ~/.ssh/known_hosts
-      rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI...";
-      # The path to the master identity used for decryption. See the option's description for more information.
-      rekey.masterIdentities = [ ./your-yubikey-identity.pub ];
-      #rekey.masterIdentities = [ "/home/myuser/master-key" ]; # External master key
-      #rekey.masterIdentities = [ "/home/myuser/master-key.age" ]; # Password protected external master key
+      age.rekey = {
+        # Obtain this using `ssh-keyscan` or by looking it up in your ~/.ssh/known_hosts
+        hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI...";
+        # The path to the master identity used for decryption. See the option's description for more information.
+        masterIdentities = [ ./your-yubikey-identity.pub ];
+        #masterIdentities = [ "/home/myuser/master-key" ]; # External master key
+        #masterIdentities = [ "/home/myuser/master-key.age" ]; # Password protected external master key
+      };
     }
     ```
 
@@ -134,9 +147,9 @@ For new installations, the setup process will be the following:
 
     ```bash
     # Create new or edit existing secret
-    nix run ".#edit-secret" secret1.age
+    nix run .#edit-secret secret1.age
     # Or encrypt an existing file
-    nix run ".#edit-secret" -i plain.txt secret1.age
+    nix run .#edit-secret -i plain.txt secret1.age
 
     # Alternatively you can encrypt something manually using (r)age
     echo "secret" | rage -e -i ./your-yubikey-identity.pub > secret1.age
@@ -145,36 +158,24 @@ For new installations, the setup process will be the following:
    Be careful when chosing your `$EDITOR` here, it might leak secret information when editing the file
    by means of undo-history, or caching in general. For `vim` and `nvim` this app automatically disables related options.
 
-3. Add the secret to your config
+3. Add and use the secret to your config
 
     ```nix
     {
-      rekey.secrets.secret1.file = ./secret1.age;
+      # Note that the option is called `rekeyFile` and not `file` if you want to use rekeying.
+      age.secrets.secret1.rekeyFile = ./secret1.age;
+      users.users.user1.passwordFile = config.age.secrets.secret1.path;
     }
     ```
 
-4. Use secret to your config
-
-    ```nix
-    {
-      users.users.user1 = {
-        passwordFile = config.rekey.secrets.secret1.path;
-
-        # Since this is just a wrapper, only the definition must use rekey.secrets.
-        # If you prefer, you may use it by accessing age.secrets directly.
-        #passwordFile = config.age.secrets.secret1.path;
-      };
-    }
-    ```
-
-5. Run `nixos-rebuild` or use your deployment tools as usual. If you need to rekey,
-   you will be prompted to do that.
+4. Run `nixos-rebuild` or use your deployment tools as usual. If you need to rekey,
+   you will be prompted to do that as a build failure will be triggered.
 
    If you are deploying your configuration to remote systems, you need to make sure that
    the correct derivation containing the rekeyed secrets is copied to the remote host's store.
 
    - [colmena](https://github.com/zhaofengli/colmena) automatically [copies](https://github.com/zhaofengli/colmena/issues/134) locally available derivations, so no additional care has to be taken here
-   - I didn't test other tools.
+   - I didn't test other tools. Please add your experiences here.
 
 ## How does it work?
 
@@ -188,7 +189,7 @@ in the nix-store, which we want to achieve without requiring you to track them i
 #### Working with impurity
 
 `agenix-rekey` solves the impurity problem by requiring you to expose an app in your flake,
-which you can invoke with `nix run '.#rekey'` whenever your secrets need to be rekeyed.
+which you can invoke with `nix run .#rekey` whenever your secrets need to be rekeyed.
 This script will run in your host-environment and thus is able to prompt for passwords
 or read YubiKeys. It therefore can run `age` to rekey the secrets and since it still
 has access to your host configurations in your flake, it can still access all necessary information.
@@ -208,11 +209,31 @@ your local store.
 
 # Module options
 
-## `rekey.secrets`
+## `age.secrets`
 
-Refers to the same options as exposed by agenix. See [`age.secrets`](https://github.com/ryantm/agenix#reference).
+These are the secret options exposed by agenix. See [`age.secrets`](https://github.com/ryantm/agenix#reference)
+for a description of all base attributes. In the following you
+will see documentation for additional options added by agenix-rekey.
 
-## `rekey.forceRekeyOnSystem`
+## `age.secrets.<name>.rekeyFile`
+
+| Type    | `nullOr path` |
+|-----|-----|
+| Default | `null` |
+| Example | `./secrets/password.age` |
+
+The path to the encrypted .age file for this secret. The file must
+be encrypted with one of the given `age.rekey.masterIdentities` and not with
+a host-specific key.
+
+This secret will automatically be rekeyed for hosts that use it, and the resulting
+host-specific .age file will be set as actual `file` attribute. So naturally this
+is mutually exclusive with specifying `file` directly.
+
+If you want to avoid having a `secrets.nix` file and only use rekeyed secrets,
+you should always use this option instead of `file`.
+
+## `age.rekey.forceRekeyOnSystem`
 
 | Type    | `nullOr str` |
 |-----|-----|
@@ -239,7 +260,7 @@ you can force it to always require a x86_64-linux bash, thus allowing your local
 The "automatic" and nice way would be to set this to builtins.currentSystem, but that would
 also be impure, so unfortunately you have to hardcode this option.
 
-## `rekey.hostPubkey`
+## `age.rekey.hostPubkey`
 
 | Type    | `coercedTo path (x: if isPath x then readFile x else x) str` |
 |-----|-----|
@@ -259,7 +280,7 @@ or directly set the host's pubkey here by specifying `"ssh-ed25519 AAAAC3NzaC1lZ
 
 Make sure to NEVER use a private key here, as it will end up in the public nix store!
 
-## `rekey.masterIdentities`
+## `age.rekey.masterIdentities`
 
 | Type    | `listOf (coercedTo path toString str)` |
 |-----|-----|
@@ -283,7 +304,7 @@ Be careful when using paths here, as they will be copied to the nix store. Using
 split-identities is fine, but if you are using plain age identities, make sure that they
 are password protected.
 
-## `rekey.extraEncryptionPubkeys`
+## `age.rekey.extraEncryptionPubkeys`
 
 | Type    | `listOf (coercedTo path toString str)` |
 |-----|-----|
@@ -291,15 +312,15 @@ are password protected.
 | Example | `[./backup-key.pub "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3290gq"]` |
 | Example | `["age1yubikey1qwf..."]` |
 
-When using `nix run '.#edit-secret' FILE`, the file will be encrypted for all identities in
-rekey.masterIdentities by default. Here you can specify an extra set of pubkeys for which
+When using `nix run .#edit-secret FILE`, the file will be encrypted for all identities in
+`age.rekey.masterIdentities` by default. Here you can specify an extra set of pubkeys for which
 all secrets should also be encrypted. This is useful in case you want to have a backup indentity
 that must be able to decrypt all secrets but should not be used when attempting regular decryption.
 
 If the coerced string is an absolute path, it will be used as if it was a recipient file.
 Otherwise, the string will be interpreted as a public key.
 
-## `rekey.agePlugins`
+## `age.rekey.agePlugins`
 
 | Type    | `listOf package` |
 |-----|-----|
