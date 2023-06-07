@@ -6,10 +6,9 @@ with appHostPkgs.lib; let
   # a unique location in /tmp which can be preseverved between invocations
   # of rekeying and deployment. We explicitly ignore the original location of the file,
   # as only it's id and content are relevant.
-  personality =
-    builtins.hashString "sha512" (toString ([pubkeyHash]
-        ++ mapAttrsToList (n: v: n + ":" + builtins.hashFile "sha512" v.rekeyFile)
-          (filterAttrs (_: v: v.rekeyFile != null) hostConfig.age.secrets)));
+  personality = builtins.hashString "sha512" (toString ([pubkeyHash]
+    ++ mapAttrsToList (n: v: n + ":" + builtins.hashFile "sha512" v.rekeyFile)
+    (filterAttrs (_: v: v.rekeyFile != null) hostConfig.age.secrets)));
   # Shortened personality truncated to 32 characters
   shortPersonality = builtins.substring 0 32 personality;
 in rec {

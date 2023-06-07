@@ -17,7 +17,10 @@ in rec {
         secretsToRekey = filterAttrs (_: v: v.rekeyFile != null) hostAttrs.config.age.secrets;
         # Create the recipient argument that will be passed to rage
         hostPubkey = removeSuffix "\n" hostAttrs.config.age.rekey.hostPubkey;
-        hostPubkeyOpt = if builtins.substring 0 1 hostPubkey == "/" then "-R" else "-r";
+        hostPubkeyOpt =
+          if builtins.substring 0 1 hostPubkey == "/"
+          then "-R"
+          else "-r";
 
         # Collect paths to enabled age plugins for this host
         envPath = ''PATH="$PATH${concatMapStrings (x: ":${x}/bin") agePlugins}"'';

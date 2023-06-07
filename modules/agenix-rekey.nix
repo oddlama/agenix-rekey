@@ -16,23 +16,25 @@ with lib; let
   rekeyedSecrets = import ../nix/output-derivation.nix rekeyHostPkgs config;
 in {
   config = {
-    assertions = [
-      {
-        assertion = config.age.rekey.masterIdentities != [];
-        message = "rekey.masterIdentities must be set.";
-      }
-      {
-        assertion = all isAbsolutePath config.age.rekey.masterIdentities;
-        message = "All masterIdentities must be referred to by an absolute path, but (${filter isAbsolutePath config.age.rekey.masterIdentities}) is not.";
-      }
-    ] ++ flatten (flip mapAttrsToList config.age.secrets (secretName: secretCfg:
+    assertions =
       [
-        # {
-        #   assertion = config.generate != null -> config.rekeyFile != null;
-        #   message = "rekeyFile must be set when using secret generation.";
-        # }
+        {
+          assertion = config.age.rekey.masterIdentities != [];
+          message = "rekey.masterIdentities must be set.";
+        }
+        {
+          assertion = all isAbsolutePath config.age.rekey.masterIdentities;
+          message = "All masterIdentities must be referred to by an absolute path, but (${filter isAbsolutePath config.age.rekey.masterIdentities}) is not.";
+        }
       ]
-    ));
+      ++ flatten (flip mapAttrsToList config.age.secrets (
+        secretName: secretCfg: [
+          # {
+          #   assertion = config.generate != null -> config.rekeyFile != null;
+          #   message = "rekeyFile must be set when using secret generation.";
+          # }
+        ]
+      ));
 
     warnings = let
       hasGoodSuffix = x: (strings.hasSuffix ".age" x || strings.hasSuffix ".pub" x);
@@ -66,8 +68,12 @@ in {
     (mkRenamedOptionModule ["rekey" "masterIdentities"] ["age" "rekey" "masterIdentities"])
     (mkRenamedOptionModule ["rekey" "extraEncryptionPubkeys"] ["age" "rekey" "extraEncryptionPubkeys"])
     (mkRenamedOptionModule ["rekey" "agePlugins"] ["age" "rekey" "agePlugins"])
-    ({ config, options, ... }: {
-      options.rekey.secrets = options.age.secrets // { visible = false; };
+    ({
+      config,
+      options,
+      ...
+    }: {
+      options.rekey.secrets = options.age.secrets // {visible = false;};
       config = {
         #assertions = flip mapAttrsToList config.rekey.secrets (secretName: secretCfg:
         #  let
@@ -88,8 +94,16 @@ in {
           ${showOptionWithDefLocs options.rekey.secrets}
         '';
 
-        age.secrets = mapAttrs
-          (_: secret: mapAttrs' (n: nameValuePair (if n == "file" then "rekeyFile" else n)) secret)
+        age.secrets =
+          mapAttrs
+          (_: secret:
+            mapAttrs' (n:
+              nameValuePair (
+                if n == "file"
+                then "rekeyFile"
+                else n
+              ))
+            secret)
           config.rekey.secrets;
       };
     })
@@ -98,7 +112,11 @@ in {
   options.age = {
     # Extend age.secrets with new options
     secrets = mkOption {
-      type = types.attrsOf (types.submodule ({ config, name, ...}: {
+      type = types.attrsOf (types.submodule ({
+        config,
+        name,
+        ...
+      }: {
         options = {
           rekeyFile = mkOption {
             type = types.nullOr types.path;
@@ -149,7 +167,12 @@ in {
         example = "x86_64-linux";
       };
       hostPubkey = mkOption {
-        type = with types; coercedTo path (x: if isPath x then readFile x else x) str;
+        type = with types;
+          coercedTo path (x:
+            if isPath x
+            then readFile x
+            else x)
+          str;
         description = mdDoc ''
           The age public key to use as a recipient when rekeying. This either has to be the
           path to an age public key file, or the public key itself in string form.
