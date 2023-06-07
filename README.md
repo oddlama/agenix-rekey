@@ -150,8 +150,10 @@ For new installations, the setup process will be the following:
     nix run .#edit-secret secret1.age
     # Or encrypt an existing file
     nix run .#edit-secret -i plain.txt secret1.age
+    # If no parameter is given, this will present an interactive list with all defined secrets
+    nix run .#edit-secret
 
-    # Alternatively you can encrypt something manually using (r)age
+    # Alternatively you can of course manually encrypt something using (r)age
     echo "secret" | rage -e -i ./your-yubikey-identity.pub > secret1.age
     ```
 

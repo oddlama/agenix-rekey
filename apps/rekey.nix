@@ -1,6 +1,10 @@
 self: appHostPkgs: nixosConfigurations: let
   inherit
     (appHostPkgs.lib)
+    warn
+    hasPrefix
+    filter
+    removePrefix
     concatLists
     concatMapStrings
     concatStringsSep
@@ -59,6 +63,11 @@ in rec {
     in
       appHostPkgs.writeShellScript "rekey" ''
         set -euo pipefail
+
+        if [[ ! -e flake.nix ]] ; then
+          echo "Please execute this script from your flake's root directory." >&2
+          exit 1
+        fi
 
         dummy_all=0
         function flush_stdin() {
@@ -136,12 +145,20 @@ in rec {
   # Create/edit a secret using your $EDITOR and automatically encrypt it using your specified master identities.
   edit-secret = mkApp {
     drv = let
+      flakeDir = toString self.outPath;
+      relativeToFlake = filePath:
+        let fileStr = toString filePath; in
+          if hasPrefix flakeDir fileStr
+          then "." + removePrefix flakeDir fileStr
+          else warn "Ignoring ${fileStr} which isn't a direct subpath of the flake directory ${flakeDir}, meaning this script cannot determine it's true origin!" null;
+
       mergeArray = f: unique (concatLists (mapAttrsToList (_: f) nixosConfigurations));
       mergedAgePlugins = mergeArray (x: x.config.age.rekey.agePlugins or []);
       mergedMasterIdentities = mergeArray (x: x.config.age.rekey.masterIdentities or []);
       mergedExtraEncryptionPubkeys = mergeArray (x: x.config.age.rekey.extraEncryptionPubkeys or []);
-      # TODO fzf selection
-      #mergedSecrets = unique (concatLists (mapAttrsToList (_: x: mapAttrsToList (_: s: s.rekeyFile) x.config.age.rekey.secrets) nixosConfigurations));
+      mergedSecrets = mergeArray (x: filter (x: x != null) (mapAttrsToList (_: s: s.rekeyFile) x.config.age.secrets));
+      # Relative path to all rekeyable secrets. Filters and warns on paths that are not part of the root flake.
+      validRelativeSecretPaths = builtins.sort (a: b: a < b) (filter (x: x != null) (map relativeToFlake mergedSecrets));
 
       isAbsolutePath = x: substring 0 1 x == "/";
       envPath = ''PATH="$PATH${concatMapStrings (x: ":${x}/bin") mergedAgePlugins}"'';
@@ -162,7 +179,7 @@ in rec {
         function show_help() {
           echo 'app edit-secret - create/edit age secret files with $EDITOR'
           echo ""
-          echo "nix run .#edit-secret FILE"
+          echo "nix run .#edit-secret [FILE]"
           echo ""
           echo 'options:'
           echo '-h, --help                Show help'
@@ -170,11 +187,17 @@ in rec {
           echo '                            content of INFILE and encrypt it to FILE.'
           echo ""
           echo 'FILE    An age-encrypted file to edit or a new file to create.'
+          echo '          If not given, a fzf selector of used secrets will be shown.'
           echo ""
           echo 'age plugins: ${concatStringsSep ", " mergedAgePlugins}'
           echo 'master identities: ${concatStringsSep ", " mergedMasterIdentities}'
           echo 'extra encryption pubkeys: ${concatStringsSep ", " mergedExtraEncryptionPubkeys}'
         }
+
+        if [[ ! -e flake.nix ]] ; then
+          echo "Please execute this script from your flake's root directory." >&2
+          exit 1
+        fi
 
         POSITIONAL_ARGS=()
         while [[ $# -gt 0 ]]; do
@@ -195,9 +218,19 @@ in rec {
           shift
         done
 
-        # Ensure file is given
-        [[ ''${#POSITIONAL_ARGS[@]} -eq 1 ]] || { show_help; exit 1; }
-        FILE="''${POSITIONAL_ARGS[0]}"
+        # If file is not given, show fzf
+        case "''${#POSITIONAL_ARGS[@]}" in
+          0)
+            FILE=$(echo ${escapeShellArg (concatStringsSep "\n" validRelativeSecretPaths)} \
+              | ${appHostPkgs.fzf}/bin/fzf --tiebreak=end --bind=tab:down,btab:up,change:top --height='~50%' --tac --cycle --layout=reverse) \
+              || die "No file selected. Aborting."
+          ;;
+          1) FILE="''${POSITIONAL_ARGS[0]}" ;;
+          *)
+            show_help
+            exit 1
+            ;;
+        esac
         [[ "$FILE" != *".age" ]] && echo "[1;33mwarning:[m secrets should use the .age suffix by convention"
 
         CLEARTEXT_FILE=$(${appHostPkgs.mktemp}/bin/mktemp)
