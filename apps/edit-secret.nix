@@ -4,49 +4,33 @@
   pkgs,
   nixosConfigurations,
   ...
-}: let
+} @ inputs: let
   inherit
     (lib)
-    concatLists
-    concatMapStrings
     concatStringsSep
     escapeShellArg
     filter
     hasPrefix
-    mapAttrsToList
     removePrefix
-    substring
-    unique
     warn
     ;
 
-  flakeDir = toString self.outPath;
+  inherit
+    (import ../nix/lib.nix inputs)
+    userFlakeDir
+    rageMasterEncrypt
+    rageMasterDecrypt
+    ;
+
   relativeToFlake = filePath: let
     fileStr = toString filePath;
   in
-    if hasPrefix flakeDir fileStr
-    then "." + removePrefix flakeDir fileStr
-    else warn "Ignoring ${fileStr} which isn't a direct subpath of the flake directory ${flakeDir}, meaning this script cannot determine it's true origin!" null;
+    if hasPrefix userFlakeDir fileStr
+    then "." + removePrefix userFlakeDir fileStr
+    else warn "Ignoring ${fileStr} which isn't a direct subpath of the flake directory ${userFlakeDir}, meaning this script cannot determine it's true origin!" null;
 
-  mergeArray = f: unique (concatLists (mapAttrsToList (_: f) nixosConfigurations));
-  mergedAgePlugins = mergeArray (x: x.config.age.rekey.agePlugins or []);
-  mergedMasterIdentities = mergeArray (x: x.config.age.rekey.masterIdentities or []);
-  mergedExtraEncryptionPubkeys = mergeArray (x: x.config.age.rekey.extraEncryptionPubkeys or []);
-  mergedSecrets = mergeArray (x: filter (x: x != null) (mapAttrsToList (_: s: s.rekeyFile) x.config.age.secrets));
   # Relative path to all rekeyable secrets. Filters and warns on paths that are not part of the root flake.
   validRelativeSecretPaths = builtins.sort (a: b: a < b) (filter (x: x != null) (map relativeToFlake mergedSecrets));
-
-  isAbsolutePath = x: substring 0 1 x == "/";
-  envPath = ''PATH="$PATH${concatMapStrings (x: ":${x}/bin") mergedAgePlugins}"'';
-  masterIdentityArgs = concatMapStrings (x: ''-i ${escapeShellArg x} '') mergedMasterIdentities;
-  extraEncryptionPubkeys =
-    concatMapStrings (
-      x:
-        if isAbsolutePath x
-        then ''-R ${escapeShellArg x} ''
-        else ''-r ${escapeShellArg x} ''
-    )
-    mergedExtraEncryptionPubkeys;
 in
   pkgs.writeShellScript "edit-secret" ''
     set -uo pipefail
@@ -55,9 +39,9 @@ in
     function show_help() {
       echo 'app edit-secret - create/edit age secret files with $EDITOR'
       echo ""
-      echo "nix run .#edit-secret [FILE]"
+      echo "nix run .#edit-secret [OPTIONS] [FILE]"
       echo ""
-      echo 'options:'
+      echo 'OPTIONS:'
       echo '-h, --help                Show help'
       echo '-i, --input INFILE        Instead of editing FILE with $EDITOR, directly use the'
       echo '                            content of INFILE and encrypt it to FILE.'
@@ -71,8 +55,7 @@ in
     }
 
     if [[ ! -e flake.nix ]] ; then
-      echo "Please execute this script from your flake's root directory." >&2
-      exit 1
+      die "Please execute this script from your flake's root directory."
     fi
 
     POSITIONAL_ARGS=()
@@ -87,7 +70,11 @@ in
           [[ -f "$INFILE" ]] || die "Input file not found: '$INFILE'"
           shift
           ;;
-        "--") break ;;
+        "--")
+          shift
+          POSITIONAL_ARGS+=("$@")
+          break
+          ;;
         "-"*|"--"*) die "Invalid option '$1'" ;;
         *) POSITIONAL_ARGS+=("$1") ;;
       esac
@@ -120,7 +107,7 @@ in
     if [[ -e "$FILE" ]]; then
       [[ -z ''${INFILE+x} ]] || die "Refusing to overwrite existing file when using --input"
 
-      ${envPath} ${pkgs.rage}/bin/rage -d ${masterIdentityArgs} -o "$CLEARTEXT_FILE" "$FILE" \
+      ${rageMasterDecrypt} -o "$CLEARTEXT_FILE" "$FILE" \
         || die "Failed to decrypt file. Aborting."
     else
       mkdir -p "$(dirname "$FILE")" \
@@ -148,7 +135,7 @@ in
       exit 0
     fi
 
-    ${envPath} ${pkgs.rage}/bin/rage -e ${masterIdentityArgs} ${extraEncryptionPubkeys} -o "$ENCRYPTED_FILE" "$CLEARTEXT_FILE" \
+    ${rageMasterEncrypt} -o "$ENCRYPTED_FILE" "$CLEARTEXT_FILE" \
       || die "Failed to (re)encrypt edited file, original is left unchanged."
     cp --no-preserve=all "$ENCRYPTED_FILE" "$FILE" # cp instead of mv preserves original attributes and permissions
 

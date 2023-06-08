@@ -9,11 +9,14 @@ nixpkgs: {
     (lib)
     all
     concatMapStrings
+    escapeShellArg
     filter
     flatten
     flip
+    hasAttr
     hasSuffix
     isPath
+    literalExpression
     mapAttrs
     mapAttrs'
     mapAttrsToList
@@ -36,7 +39,10 @@ nixpkgs: {
     if config.age.rekey.forceRekeyOnSystem == null
     then pkgs
     else import nixpkgs {system = config.age.rekey.forceRekeyOnSystem;};
-  rekeyedSecrets = import ../nix/output-derivation.nix rekeyHostPkgs config;
+  rekeyedSecrets = import ../nix/output-derivation.nix {
+    appHostPkgs = rekeyHostPkgs;
+    hostConfig = config;
+  };
 in {
   config = {
     assertions =
@@ -52,10 +58,18 @@ in {
       ]
       ++ flatten (flip mapAttrsToList config.age.secrets (
         secretName: secretCfg: [
-          # {
-          #   assertion = config.generate != null -> config.rekeyFile != null;
-          #   message = "rekeyFile must be set when using secret generation.";
-          # }
+          {
+            assertion = secretCfg.generationScript == null || secretCfg.generator == null;
+            message = "age.secrets.${secretName}: Cannot use both `generator` and `generationScript` simultaneously.";
+          }
+          {
+            assertion = secretCfg.generator != null -> hasAttr secretCfg.generator config.age.generators;
+            message = "age.secrets.${secretName}: `generator` is set to an unknown generator `${secretCfg.generator}` not defined in `age.generators`.";
+          }
+          {
+            assertion = (secretCfg.generator != null || secretCfg.generator != null) -> secretCfg.rekeyFile != null;
+            message = "age.secrets.${secretName}: `rekeyFile` must be set when using secret generation.";
+          }
         ]
       ));
 
@@ -124,11 +138,7 @@ in {
   options.age = {
     # Extend age.secrets with new options
     secrets = mkOption {
-      type = types.attrsOf (types.submodule ({
-        config,
-        name,
-        ...
-      }: {
+      type = types.attrsOf (types.submodule (submod: {
         options = {
           rekeyFile = mkOption {
             type = types.nullOr types.path;
@@ -146,12 +156,88 @@ in {
               you should always use this option instead of `file`.
             '';
           };
+
+          generator = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            description = mdDoc ''
+              The generator that will be used to generate this secret's content,
+              if it doesn't exist yet. Must refer to an entry in `age.generators`.
+            '';
+          };
+
+          generationScript = mkOption {
+            type = types.nullOr (types.functionTo types.str);
+            default = null;
+            example = literalExpression ''
+              {
+                name,   # The name of the secret as defined in age.secrets.<name>
+                secret, # The secret attributes (age.secrets.''${name})
+                file,   # The actual path to the .age file that will be written after
+                        #   this function returns and the content is encrypted.
+                        #   Useful to write additional information to adjacent files.
+                pkgs,   # The package set for the host that is running the script
+                lib,    # Convenience access to the nixpkgs library
+                ...     # For future/unused arguments
+              }: '''
+                ''${pkgs.wireguard-tools}/bin/wg genkey \
+                  | tee /dev/stdout \
+                  | ''${pkgs.wireguard-tools}/bin/wg pubkey > ''${escapeShellArg (removeSuffix ".age" file + ".pub")}
+              '''
+            '';
+            description = mdDoc ''
+              An ad-hoc generation script for this secret. Cannot be set at the same
+              time as `generator`.
+
+              This must be a function that evaluates to a script. This script will be
+              added to the global generation script verbatim and runs outside of any sandbox.
+              This allows you to create/overwrite adjacent files if neccessary, for example
+              when you also want to store the public key for a generated private key.
+              Refer to the example for a description of the arguments. The resulting
+              secret should be written to stdout and any errors or warnings to stderr.
+              Note that function is run under bash's `set -e` conditions.
+            '';
+          };
+
+          _generationScript = mkOption {
+            type = types.nullOr (types.functionTo types.str);
+            readOnly = true;
+            internal = true;
+            description = "The effective generation script.";
+            default =
+              if submod.config.generator != null
+              then config.age.generators.${submod.config.generator}
+              else submod.config.generationScript;
+          };
         };
         config = {
           # Produce a rekeyed age secret
-          file = mkIf (config.rekeyFile != null) "${rekeyedSecrets.drv}/${name}.age";
+          file = mkIf (submod.config.rekeyFile != null) "${rekeyedSecrets.drv}/${submod.name}.age";
         };
       }));
+    };
+
+    generators = mkOption {
+      type = types.attrsOf (types.functionTo types.str);
+      default = {
+        alnum = {pkgs, ...}: "${pkgs.pwgen}/bin/pwgen -s 48 1";
+        base64 = {pkgs, ...}: "${pkgs.openssl}/bin/openssl rand -base64 32";
+        hex = {pkgs, ...}: "${pkgs.openssl}/bin/openssl rand -hex 24";
+        passphrase = {pkgs, ...}: "${pkgs.xkcdpass}/bin/xkcdpass --numwords=6 --delimiter=' '";
+      };
+      example = literalExpression ''{ passphrase = { pkgs, ... }: "''${pkgs.xkcdpass}"; }'';
+      description = mdDoc ''
+        Allows defining reusable secret generation scripts.
+        Refer to `age.secrets.<name>.generationScript` for a detailed
+        description of what arguments the function takes and what it should return.
+
+        By default these generators are provided:
+
+          - `alnum`: Generates an alphanumeric string of length 48
+          - `base64`: Generates a base64 string of 32-byte random (length 44)
+          - `hex`: Generates a hex string of 24-byte random (length 48)
+          - `passphrase`: Generates a 6-word passphrase delimited by spaces
+      '';
     };
 
     rekey = {

@@ -4,7 +4,7 @@
   pkgs,
   nixosConfigurations,
   ...
-}: let
+} @ inputs: let
   inherit
     (lib)
     concatMapStrings
@@ -13,36 +13,33 @@
     filterAttrs
     mapAttrsToList
     removeSuffix
-    substring
+    ;
+
+  inherit
+    (import ../nix/lib.nix inputs)
+    rageMasterDecrypt
+    rageHostEncrypt
     ;
 
   rekeyCommandsForHost = hostName: hostAttrs: let
-    inherit (hostAttrs.config.age.rekey) agePlugins masterIdentities;
     # The derivation containing the resulting rekeyed secrets
-    rekeyedSecrets = import ../nix/output-derivation.nix pkgs hostAttrs.config;
+    rekeyedSecrets = import ../nix/output-derivation.nix {
+      appHostPkgs = pkgs;
+      hostConfig = hostAttrs.config;
+    };
     # We need to know where this derivation expects the rekeyed secrets to be stored
     inherit (rekeyedSecrets) tmpSecretsDir;
     # All secrets that have rekeyFile set. These will be rekeyed.
     secretsToRekey = filterAttrs (_: v: v.rekeyFile != null) hostAttrs.config.age.secrets;
-    # Create the recipient argument that will be passed to rage
-    hostPubkey = removeSuffix "\n" hostAttrs.config.age.rekey.hostPubkey;
-    hostPubkeyOpt =
-      if builtins.substring 0 1 hostPubkey == "/"
-      then "-R"
-      else "-r";
 
-    # Collect paths to enabled age plugins for this host
-    envPath = ''PATH="$PATH${concatMapStrings (x: ":${x}/bin") agePlugins}"'';
-    # The identities which can decrypt the existing secrets need to be passed to rage
-    masterIdentityArgs = concatMapStrings (x: ''-i ${escapeShellArg x} '') masterIdentities;
     # Finally, the command that rekeys a given secret.
-    rekeyCommand = secretName: secretAttrs: let
+    rekeyCommand = secretName: secret: let
       secretOut = "${tmpSecretsDir}/${secretName}.age";
     in ''
-      echo "Rekeying ${secretName} (${secretAttrs.rekeyFile}) for host ${hostName}"
-      if ! ${envPath} decrypt "${secretAttrs.rekeyFile}" "${secretName}" "${hostName}" ${masterIdentityArgs} \
-        | ${envPath} ${pkgs.rage}/bin/rage -e ${hostPubkeyOpt} ${escapeShellArg hostPubkey} -o "${secretOut}"; then
-        echo "[1;31mFailed to encrypt ${secretOut} for ${hostName}![m" >&2
+      echo "Rekeying ${secretName} for host ${hostName}"
+      if ! decrypt ${escapeShellArg secret.rekeyFile} ${escapeShellArg secretName} ${escapeShellArg hostName} \
+        | ${rageHostEncrypt hostAttrs} -o ${escapeShellArg secretOut}; then
+        echo "[1;31mFailed to re-encrypt ${secret.rekeyFile} for ${hostName}![m" >&2
       fi
     '';
   in ''
@@ -50,16 +47,35 @@
     test -e "${tmpSecretsDir}" && rm -r "${tmpSecretsDir}"
     mkdir -p "${tmpSecretsDir}"
 
-    # Rekey secrets for this host
+    # Rekey secrets for ${hostName}
     ${concatStringsSep "\n" (mapAttrsToList rekeyCommand secretsToRekey)}
   '';
 in
   pkgs.writeShellScript "rekey" ''
     set -euo pipefail
 
+    function show_help() {
+      echo 'app rekey - Re-encrypts secrets for hosts that require them'
+      echo ""
+      echo "nix run .#rekey [OPTIONS]"
+      echo ""
+      echo 'OPTIONS:'
+      echo '-h, --help                Show help'
+    }
+
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        "help"|"--help"|"-help"|"-h")
+          show_help
+          exit 1
+          ;;
+        *) die "Invalid option '$1'" ;;
+      esac
+      shift
+    done
+
     if [[ ! -e flake.nix ]] ; then
-      echo "Please execute this script from your flake's root directory." >&2
-      exit 1
+      die "Please execute this script from your flake's root directory."
     fi
 
     dummy_all=0
@@ -72,7 +88,6 @@ in
     # "$1" secret file
     # "$2" secret name
     # "$3" hostname
-    # "$@" masterIdentityArgs
     function decrypt() {
       local response
       local secret_file=$1
@@ -83,7 +98,7 @@ in
       # Outer loop, allows us to retry the command
       while true; do
         # Try command
-        if ${pkgs.rage}/bin/rage -d "$@" "$secret_file"; then
+        if ${rageMasterDecrypt} "$secret_file"; then
           return
         fi
 
@@ -118,6 +133,7 @@ in
     }
 
     ${concatStringsSep "\n" (mapAttrsToList rekeyCommandsForHost nixosConfigurations)}
+
     # Pivot to another script that has /tmp available in its sandbox
     # and is impure in case the master key is located elsewhere on the system
     nix run --extra-sandbox-paths /tmp --impure "${self.outPath}#_rekey-save-outputs";

@@ -16,8 +16,9 @@ self: appHostPkgs: nixosConfigurations: let
   };
   apps = [
     ./_rekey-save-output.nix
-    ./rekey.nix
     ./edit-secret.nix
+    ./generate-secrets.nix
+    ./rekey.nix
   ];
 in
   builtins.listToAttrs (flip map apps (
