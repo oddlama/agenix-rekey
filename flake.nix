@@ -1,6 +1,6 @@
 {
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-  description = "An agenix extension facilitating Yubikey/master-identity use by automating per-host secret rekeying";
+  description = "An agenix extension adding secret generation and automatic rekeying using a YubiKey or master-identity";
   outputs = {
     self,
     nixpkgs,
