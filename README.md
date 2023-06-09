@@ -235,10 +235,8 @@ Notice how we use the passed `pkgs` set instead of the package set from the conf
 
 ```nix
 {
-  age.secrets.generators.long-passphrase = {
-    rekeyFile = ./secrets/randomPassword.age;
-    generator.script = {pkgs, ...}: "${pkgs.xkcdpass}/bin/xkcdpass --numwords=10";
-  };
+  # Allows you to use "long-passphrase" as a generator.
+  age.generators.long-passphrase.script = {pkgs, ...}: "${pkgs.xkcdpass}/bin/xkcdpass --numwords=10";
 }
 ```
 
@@ -247,14 +245,11 @@ derive the matching public keys and store them in an adjacent `.pub` file:
 
 ```nix
 {
-  age.secrets.generators.wireguard-priv = {
-    rekeyFile = ./secrets/wg-priv.age;
-    generator.script = {pkgs, file, ...}: ''
-      ${pkgs.wireguard-tools}/bin/wg genkey \
-        | tee /dev/stdout \
-        | ${pkgs.wireguard-tools}/bin/wg pubkey > ${lib.escapeShellArg (lib.removeSuffix ".age" file + ".pub")}
-    '';
-  };
+  age.generators.wireguard-priv.script = {pkgs, file, ...}: ''
+    ${pkgs.wireguard-tools}/bin/wg genkey \
+      | tee /dev/stdout \
+      | ${pkgs.wireguard-tools}/bin/wg pubkey > ${lib.escapeShellArg (lib.removeSuffix ".age" file + ".pub")}
+  '';
 }
 ```
 
@@ -265,13 +260,13 @@ which are also generated automatically:
 ```nix
 {
   # Generate a random password
-  age.secrets.generators.basic-auth-pw = {
+  age.secrets.basic-auth-pw = {
     rekeyFile = ./secrets/basic-auth-pw.age;
     generator = "alnum";
   };
 
   # Generate a htpasswd from several random passwords
-  age.secrets.generators.some-htpasswd = {
+  age.secrets.some-htpasswd = {
     rekeyFile = ./secrets/htpasswd.age;
     generator = {
       # All these secrets will be generated first and their paths are
