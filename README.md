@@ -2,7 +2,7 @@
 
 # agenix-rekey
 
-This is an extension for [agenix](https://github.com/ryantm/agenix) which allows you to ged rid
+This is an extension for [agenix](https://github.com/ryantm/agenix) which allows you to get rid
 of maintaining a `secrets.nix` file by re-encrypting secrets where needed.
 It also allows you to define versatile generators for secrets,
 so they can be bootstrapped automatically. This extension is a flakes-only project
@@ -65,7 +65,7 @@ Use `nix run .#<appname> -- --help` for specific usage information.
 
     # Some initialized nixpkgs set
     pkgs = import nixpkgs { system = "x86_64-linux"; };
-    # Adds the neccessary apps so you can rekey your secrets with `nix run .#rekey`
+    # Adds the necessary apps so you can rekey your secrets with `nix run .#rekey`
     apps."x86_64-linux" = agenix-rekey.defineApps self pkgs self.nixosConfigurations;
   };
 }
@@ -131,7 +131,7 @@ need to be adjusted like below.
 
 Since agenix-rekey is just an extension, everything you know about agenix still applies as usual.
 Apart from specifying meta information about your master key, the only thing that you have to change
-to use rekeying is to sepcify `rekeyFile` instead of `file`. The full setup process is the following:
+to use rekeying is to specify `rekeyFile` instead of `file`. The full setup process is the following:
 
 1. For each host you have to provide a pubkey for rekeying and select the master identity
    to use for decrypting. Apart for `hostPubkey`, this is probably the same for each host.
@@ -165,7 +165,7 @@ to use rekeying is to sepcify `rekeyFile` instead of `file`. The full setup proc
     echo "secret" | rage -e -i ./your-yubikey-identity.pub > secret1.age
     ```
 
-   Be careful when chosing your `$EDITOR` here, it might leak secret information when editing the file
+   Be careful when choosing your `$EDITOR` here, it might leak secret information when editing the file
    by means of undo-history, or caching in general. For `vim` and `nvim` this app automatically disables related options.
 
 3. Define and use the secret in your config
@@ -178,7 +178,7 @@ to use rekeying is to sepcify `rekeyFile` instead of `file`. The full setup proc
     }
     ```
 
-4. Deploy you system as usual by using `nixos-rebuild` or your favourite deployment tool.
+4. Deploy your system as usual by using `nixos-rebuild` or your favourite deployment tool.
    In case you need to rekey, you will be prompted to do that as part of a build failure that will be triggered.
 
    If you are deploying your configuration to remote systems, you need to make sure that
@@ -306,7 +306,7 @@ which are also generated automatically:
 
 The central problem is that rekeying secrets on-the-fly while building your system
 is fundamentally impossible, since it is an impure operation. It will always require
-an external input in form of your master password or has to communicate with a YubiKey.
+an external input in the form of your master password or has to communicate with a YubiKey.
 
 The second problem is that building your system requires the rekeyed secrets to be available
 in the nix-store, which we want to achieve without requiring you to track them in git.
@@ -352,7 +352,7 @@ be encrypted with one of the given `age.rekey.masterIdentities` and not with
 a host-specific key.
 
 This secret will automatically be rekeyed for hosts that use it, and the resulting
-host-specific .age file will be set as actual `file` attribute. So naturally this
+host-specific .age file will be set as an actual `file` attribute. So naturally this
 is mutually exclusive with specifying `file` directly.
 
 If you want to avoid having a `secrets.nix` file and only use rekeyed secrets,
@@ -394,7 +394,7 @@ Allows defining reusable secret generators. By default these generators are prov
 
 Other secrets on which this secret depends. This guarantees that in the final
 `nix run .#generate-secrets` script, all dependencies will be generated before
-this secret is generated, allowing you use their outputs via the passed `decrypt` function.
+this secret is generated, allowing you to use their outputs via the passed `decrypt` function.
 
 The given dependencies will be passed to the defined `script` via the `deps` parameter,
 which will be a list of their true source locations (`rekeyFile`) in no particular order.
@@ -413,10 +413,10 @@ are passed to the agenix-rekey app definition via the nixosConfigurations parame
 | Example | See source or [Secret generation](#secret-generation). |
 
 This must be a function that evaluates to a script. This script will be
-added to the global generation script verbatim and runs outside of any sandbox.
+added to the global generation script verbatim and runs outside any sandbox.
 Refer to `age.generators` for example usage.
 
-This allows you to create/overwrite adjacent files if neccessary, for example
+This allows you to create/overwrite adjacent files if necessary, for example
 when you also want to store the public key for a generated private key.
 Refer to the example for a description of the arguments. The resulting
 secret should be written to stdout and any info or errors to stderr.
@@ -442,7 +442,7 @@ inputs, we have to know it in advance to predict where the output will be. If yo
 architectures, then we'd have multiple candidate derivations for the rekeyed secrets, but we want
 a single predictable derivation.
 
-If you would try to deploy an aarch64-linux system, but are on x86_64-linux without binary
+If you tried to deploy an aarch64-linux system, but are on x86_64-linux without binary
 emulation, then nix would have to build the rekeyed secrets using a remote builder (since the
 derivation then requires aarch64-linux bash). This option will override the pkgs set passed to
 the derivation such that it will use a builder of the specified architecture instead. This way
@@ -484,12 +484,12 @@ to rekey them for your host(s). If multiple identities are given, they will be t
 The recommended options are:
 
 - Use a split-identity ending in `.pub`, where the private part is not contained (a yubikey identity)
-- Use an absolute path to your key outside of the nix store ("/home/myuser/age-master-key")
+- Use an absolute path to your key outside the nix store ("/home/myuser/age-master-key")
 - Or encrypt your age identity and use the extension `.age`. You can encrypt an age identity
   using `rage -p -o privkey.age privkey` which protects it in your store.
 
 If you are using YubiKeys, you can specify multiple split-identities here and use them interchangeably.
-You will have the option to skip any YubiKeys that are not available to you in that moment.
+You will have the option to skip any YubiKeys that are not available to you at that moment.
 
 Be careful when using paths here, as they will be copied to the nix store. Using
 split-identities is fine, but if you are using plain age identities, make sure that they
@@ -505,7 +505,7 @@ are password protected.
 
 When using `nix run .#edit-secret FILE`, the file will be encrypted for all identities in
 `age.rekey.masterIdentities` by default. Here you can specify an extra set of pubkeys for which
-all secrets should also be encrypted. This is useful in case you want to have a backup indentity
+all secrets should also be encrypted. This is useful in case you want to have a backup identity
 that must be able to decrypt all secrets but should not be used when attempting regular decryption.
 
 If the coerced string is an absolute path, it will be used as if it was a recipient file.
