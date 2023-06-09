@@ -18,6 +18,7 @@
   inherit
     (import ../nix/lib.nix inputs)
     userFlakeDir
+    mergedSecrets
     rageMasterEncrypt
     rageMasterDecrypt
     ;
@@ -48,10 +49,6 @@ in
       echo ""
       echo 'FILE    An age-encrypted file to edit or a new file to create.'
       echo '          If not given, a fzf selector of used secrets will be shown.'
-      echo ""
-      echo 'age plugins: ${concatStringsSep ", " mergedAgePlugins}'
-      echo 'master identities: ${concatStringsSep ", " mergedMasterIdentities}'
-      echo 'extra encryption pubkeys: ${concatStringsSep ", " mergedExtraEncryptionPubkeys}'
     }
 
     if [[ ! -e flake.nix ]] ; then

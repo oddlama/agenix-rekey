@@ -16,6 +16,7 @@ nixpkgs: {
     hasAttr
     hasSuffix
     isPath
+    isString
     literalExpression
     mapAttrs
     mapAttrs'
@@ -43,6 +44,70 @@ nixpkgs: {
     appHostPkgs = rekeyHostPkgs;
     hostConfig = config;
   };
+
+  generatorType = types.submodule {
+    options = {
+      dependencies = mkOption {
+        type = types.listOf types.unspecified;
+        example = literalExpression ''[ config.age.secrets.basicAuthUser1 config.nixosConfigurations.machine2.age.secrets.basicAuthUser ]'';
+        default = [];
+        description = mdDoc ''
+          Other secrets on which this secret depends. This guarantees that in the final
+          `nix run .#generate-secrets` script, all dependencies will be generated before
+          this secret is generated, allowing you use their outputs via the passed `decrypt` function.
+
+          The given dependencies will be passed to the defined `script` via the `deps` parameter,
+          which will be a list of their true source locations (`rekeyFile`) in no particular order.
+
+          This should refer only to secret definitions from `config.age.secrets` that
+          have a generator. This is useful if you want to create derived secrets,
+          such as generating a .htpasswd file from several basic auth passwords.
+
+          You can refer to age secret definitions of other systems, as long as they
+          are all passed to agenix-rekey via the nixosConfigurations parameter.
+        '';
+      };
+      script = mkOption {
+        type = types.functionTo types.str;
+        example = literalExpression ''
+          {
+            name,    # The name of the secret as defined in age.secrets.<name>
+            secret,  # The secret attributes (age.secrets.''${name})
+            lib,     # Convenience access to the nixpkgs library
+            pkgs,    # The package set for the host that is running the script
+            file,    # The actual path to the .age file that will be written after
+                     #   this function returns and the content is encrypted.
+                     #   Useful to write additional information to adjacent files.
+            deps,    # The list of all secret files from our `dependencies`.
+                     #   Each entry is a set of `{ name, host, file }`, corresponding to
+                     #   the secret `nixosConfigurations.''${host}.age.secrets.''${name}`.
+                     #   `file` is the true source location of the secret's `rekeyFile`.
+                     #   You can extract the plaintext with `''${decrypt} ''${escapeShellArg dep.file}`.
+            decrypt, # The base rage command that can decrypt secrets to stdout by
+                     #   using the defined masterIdentities.
+            ...      # For future/unused arguments
+          }: '''
+            ''${pkgs.wireguard-tools}/bin/wg genkey \
+              | tee /dev/stdout \
+              | ''${pkgs.wireguard-tools}/bin/wg pubkey > ''${escapeShellArg (removeSuffix ".age" file + ".pub")}
+          '''
+        '';
+        description = mdDoc ''
+          This must be a function that evaluates to a script. This script will be
+          added to the global generation script verbatim and runs outside of any sandbox.
+          Refer to `age.generators` for example usage.
+
+          This allows you to create/overwrite adjacent files if neccessary, for example
+          when you also want to store the public key for a generated private key.
+          Refer to the example for a description of the arguments. The resulting
+          secret should be written to stdout and any info or errors to stderr.
+
+          Note that the script is run with `set -euo pipefail` conditions as the
+          normal user that runs `nix run .#generate-secrets`.
+        '';
+      };
+    };
+  };
 in {
   config = {
     assertions =
@@ -56,22 +121,17 @@ in {
           message = "All masterIdentities must be referred to by an absolute path, but (${filter isAbsolutePath config.age.rekey.masterIdentities}) is not.";
         }
       ]
-      ++ flatten (flip mapAttrsToList config.age.secrets (
-        secretName: secretCfg: [
+      ++ flatten (flip mapAttrsToList config.age.secrets
+        (secretName: secretCfg: [
           {
-            assertion = secretCfg.generationScript == null || secretCfg.generator == null;
-            message = "age.secrets.${secretName}: Cannot use both `generator` and `generationScript` simultaneously.";
+            assertion = isString secretCfg.generator -> hasAttr secretCfg.generator config.age.generators;
+            message = "age.secrets.${secretName}: generator '`${secretCfg.generator}`' is not defined in `age.generators`.";
           }
           {
-            assertion = secretCfg.generator != null -> hasAttr secretCfg.generator config.age.generators;
-            message = "age.secrets.${secretName}: `generator` is set to an unknown generator `${secretCfg.generator}` not defined in `age.generators`.";
+            assertion = secretCfg.generator != null -> secretCfg.rekeyFile != null;
+            message = "age.secrets.${secretName}: `rekeyFile` must be set when using a generator.";
           }
-          {
-            assertion = (secretCfg.generator != null || secretCfg.generator != null) -> secretCfg.rekeyFile != null;
-            message = "age.secrets.${secretName}: `rekeyFile` must be set when using secret generation.";
-          }
-        ]
-      ));
+        ]));
 
     warnings = let
       hasGoodSuffix = x: (hasSuffix ".age" x || hasSuffix ".pub" x);
@@ -140,6 +200,13 @@ in {
     secrets = mkOption {
       type = types.attrsOf (types.submodule (submod: {
         options = {
+          id = mkOption {
+            type = types.str;
+            default = submod.config._module.args.name;
+            readOnly = true;
+            description = mdDoc "The true identifier of this secret as used in `age.secrets`.";
+          };
+
           rekeyFile = mkOption {
             type = types.nullOr types.path;
             default = null;
@@ -158,80 +225,62 @@ in {
           };
 
           generator = mkOption {
-            type = types.nullOr types.str;
+            type = types.nullOr (types.either types.str generatorType);
             default = null;
+            example = "alnum";
             description = mdDoc ''
-              The generator that will be used to generate this secret's content,
-              if it doesn't exist yet. Must refer to an entry in `age.generators`.
+              The generator that will be used to create this secret's if it doesn't exist yet.
+              Must be a generator definition like `age.generators.<name>`, or just a string to
+              refer to one of the global generators in `age.generators`.
+
+              Refer to `age.generators.<name>` for more information on defining generators.
             '';
           };
 
-          generationScript = mkOption {
-            type = types.nullOr (types.functionTo types.str);
-            default = null;
-            example = literalExpression ''
-              {
-                name,   # The name of the secret as defined in age.secrets.<name>
-                secret, # The secret attributes (age.secrets.''${name})
-                file,   # The actual path to the .age file that will be written after
-                        #   this function returns and the content is encrypted.
-                        #   Useful to write additional information to adjacent files.
-                pkgs,   # The package set for the host that is running the script
-                lib,    # Convenience access to the nixpkgs library
-                ...     # For future/unused arguments
-              }: '''
-                ''${pkgs.wireguard-tools}/bin/wg genkey \
-                  | tee /dev/stdout \
-                  | ''${pkgs.wireguard-tools}/bin/wg pubkey > ''${escapeShellArg (removeSuffix ".age" file + ".pub")}
-              '''
-            '';
-            description = mdDoc ''
-              An ad-hoc generation script for this secret. Cannot be set at the same
-              time as `generator`.
-
-              This must be a function that evaluates to a script. This script will be
-              added to the global generation script verbatim and runs outside of any sandbox.
-              This allows you to create/overwrite adjacent files if neccessary, for example
-              when you also want to store the public key for a generated private key.
-              Refer to the example for a description of the arguments. The resulting
-              secret should be written to stdout and any errors or warnings to stderr.
-              Note that function is run under bash's `set -e` conditions.
-            '';
-          };
-
-          _generationScript = mkOption {
-            type = types.nullOr (types.functionTo types.str);
+          _generator = mkOption {
+            type = types.nullOr types.unspecified;
             readOnly = true;
             internal = true;
-            description = "The effective generation script.";
+            description = "The effective generator definition, if any.";
             default =
-              if submod.config.generator != null
+              if isString submod.config.generator
               then config.age.generators.${submod.config.generator}
-              else submod.config.generationScript;
+              else submod.config.generator;
           };
         };
         config = {
           # Produce a rekeyed age secret
-          file = mkIf (submod.config.rekeyFile != null) "${rekeyedSecrets.drv}/${submod.name}.age";
+          file = mkIf (submod.config.rekeyFile != null) "${rekeyedSecrets.drv}/${submod.config.id}.age";
         };
       }));
     };
 
     generators = mkOption {
-      type = types.attrsOf (types.functionTo types.str);
+      type = types.attrsOf generatorType;
       default = {
-        alnum = {pkgs, ...}: "${pkgs.pwgen}/bin/pwgen -s 48 1";
-        base64 = {pkgs, ...}: "${pkgs.openssl}/bin/openssl rand -base64 32";
-        hex = {pkgs, ...}: "${pkgs.openssl}/bin/openssl rand -hex 24";
-        passphrase = {pkgs, ...}: "${pkgs.xkcdpass}/bin/xkcdpass --numwords=6 --delimiter=' '";
+        alnum.script = {pkgs, ...}: "${pkgs.pwgen}/bin/pwgen -s 48 1";
+        base64.script = {pkgs, ...}: "${pkgs.openssl}/bin/openssl rand -base64 32";
+        hex.script = {pkgs, ...}: "${pkgs.openssl}/bin/openssl rand -hex 24";
+        passphrase.script = {pkgs, ...}: "${pkgs.xkcdpass}/bin/xkcdpass --numwords=6 --delimiter=' '";
       };
-      example = literalExpression ''{ passphrase = { pkgs, ... }: "''${pkgs.xkcdpass}"; }'';
+      example = ''
+        {
+          alnum.script = {pkgs, ...}: "''${pkgs.pwgen}/bin/pwgen -s 48 1";
+          aggregateHtpasswd = {
+            dependencies = [ config.age.secrets.basicAuthUser1 config.age.secrets.basicAuthUser2 ];
+            script = { pkgs, lib, decrypt, deps, ... }:
+              lib.flip lib.concatMapStrings deps ({ name, host, file }: '''
+                echo "Aggregating "''${lib.escapeShellArg host}:''${lib.escapeShellArg name} >&2
+                # Decrypt the dependency containing the cleartext password,
+                # and run it through htpasswd to generate a bcrypt hash
+                ''${decrypt} ''${lib.escapeShellArg file} \
+                  | ''${pkgs.apacheHttpd}/bin/htpasswd -niBC 10 ''${lib.escapeShellArg host}
+              ''');
+          };
+        }
+      '';
       description = mdDoc ''
-        Allows defining reusable secret generation scripts.
-        Refer to `age.secrets.<name>.generationScript` for a detailed
-        description of what arguments the function takes and what it should return.
-
-        By default these generators are provided:
+        Allows defining reusable secret generators. By default these generators are provided:
 
           - `alnum`: Generates an alphanumeric string of length 48
           - `base64`: Generates a base64 string of 32-byte random (length 44)

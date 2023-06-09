@@ -12,15 +12,20 @@
     attrValues
     concatStringsSep
     escapeShellArg
+    flip
     foldl'
     hasAttr
     hasPrefix
+    mapAttrs
+    nameValuePair
     removePrefix
+    stringsWithDeps
     ;
 
   inherit
     (import ../nix/lib.nix inputs)
     userFlakeDir
+    rageMasterDecrypt
     rageMasterEncrypt
     ;
 
@@ -35,14 +40,22 @@
   addGeneratedSecretChecked = host: set: secretName: let
     secret = nixosConfigurations.${host}.config.age.secrets.${secretName};
     sourceFile = relativeToFlake secret.rekeyFile;
-    script = secret._generationScript {
+    script = secret._generator.script {
+      inherit secret pkgs lib;
       file = sourceFile;
       name = secretName;
-      inherit secret pkgs lib;
+      decrypt = rageMasterDecrypt;
+      deps = flip map secret._generator.dependencies (dep:
+        assert assertMsg (dep._generator != null)
+        "${host}.config.age.secrets.${secretName}: A given dependency is a secret without a generator."; {
+          inherit host;
+          name = dep.id;
+          file = relativeToFlake dep.rekeyFile;
+        });
     };
   in
     # Filter secrets that don't need to be generated
-    if secret._generationScript == null
+    if secret._generator == null
     then set
     else
       # Assert that the generator is the same if it was defined on multiple hosts
@@ -61,9 +74,7 @@
   secretsWithGenerators =
     foldl'
     (set: host:
-      foldl'
-      (addGeneratedSecretChecked host)
-      set
+      foldl' (addGeneratedSecretChecked host) set
       (attrNames nixosConfigurations.${host}.config.age.secrets))
     {} (attrNames nixosConfigurations);
 
@@ -71,17 +82,29 @@
   secretGenerationCommand = secret: ''
     if wants_secret ${escapeShellArg secret.sourceFile} ; then
       if [[ ! -e ${escapeShellArg secret.sourceFile} ]] || [[ "$FORCE_GENERATE" == true ]]; then
-        echo "Generating secret [34m"${escapeShellArg secret.sourceFile}"[m [90m("${concatStringsSep ", " (map escapeShellArg secret.defs)}")[m"
-        (
+        echo "Generating secret [34m"${escapeShellArg secret.sourceFile}"[m [90m("${concatStringsSep "', '" (map escapeShellArg secret.defs)}")[m"
+        content=$(
           ${secret.script}
-        ) \
-          | ${rageMasterEncrypt} -o ${escapeShellArg secret.sourceFile} \
-          || die "Failed to (re)encrypt edited file, original is left unchanged."
+        ) || die "Generator exited with status $?."
+
+        ${rageMasterEncrypt} -o ${escapeShellArg secret.sourceFile} <<< "$content" \
+          || die "Failed to generate or encrypt secret."
       else
-        echo "[90mSkipping existing secret "${escapeShellArg secret.sourceFile} ("${concatStringsSep ", " (map escapeShellArg secret.defs)}")"[m"
+        echo "[90mSkipping existing secret "${escapeShellArg secret.sourceFile}" ("${concatStringsSep "', '" (map escapeShellArg secret.defs)}")[m"
       fi
     fi
   '';
+
+  # Use stringsWithDeps to compute an ordered list of secret generation commands.
+  # Any dependencies of generators are guaranteed to come first, such that
+  # generators may use the result of other secrets.
+  orderedGenerationCommands = let
+    stages = flip mapAttrs secretsWithGenerators (i: secret:
+      stringsWithDeps.fullDepEntry
+      (secretGenerationCommand secretsWithGenerators.${i})
+      (map (x: relativeToFlake x.rekeyFile) secretsWithGenerators.${i}.secret._generator.dependencies));
+  in
+    stringsWithDeps.textClosureMap (x: x) stages (attrNames stages);
 in
   pkgs.writeShellScript "generate-secrets" ''
     set -euo pipefail
@@ -145,5 +168,5 @@ in
       die "Provided path matches no known secret: $secret"
     done
 
-    ${concatStringsSep "\n" (map secretGenerationCommand (attrValues secretsWithGenerators))}
+    ${orderedGenerationCommands}
   ''

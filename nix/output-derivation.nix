@@ -21,7 +21,7 @@
   pubkeyHash = hashString "sha1" hostConfig.age.rekey.hostPubkey;
   genSecretHash = name: secret: let
     hint =
-      if secret.generator != null || secret.generationScript != null
+      if secret.generator != null
       then "Did you run `[32mnix run .#generate-secrets[m` to generate it and have you added it to git?"
       else "Have you added it to git?";
   in

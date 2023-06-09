@@ -24,7 +24,6 @@
   mergedMasterIdentities = mergeArray (x: x.config.age.rekey.masterIdentities or []);
   mergedExtraEncryptionPubkeys = mergeArray (x: x.config.age.rekey.extraEncryptionPubkeys or []);
   mergedSecrets = mergeArray (x: filter (y: y != null) (mapAttrsToList (_: s: s.rekeyFile) x.config.age.secrets));
-  mergedGenerators = mergeArray (x: filter (y: y != null) (mapAttrsToList (_: s: s.rekeyFile) x.config.age.secrets));
 
   isAbsolutePath = x: substring 0 1 x == "/";
   pubkeyOpt = x:
@@ -40,6 +39,7 @@
   extraEncryptionPubkeys = concatStringsSep " " (map pubkeyOpt mergedExtraEncryptionPubkeys);
 in {
   userFlakeDir = toString self.outPath;
+  inherit mergedSecrets;
 
   # Premade shell commands to encrypt and decrypt secrets
   rageMasterEncrypt = "${envPath} ${pkgs.rage}/bin/rage -e ${masterIdentityArgs} ${extraEncryptionPubkeys}";

@@ -15,7 +15,7 @@ self: appHostPkgs: nixosConfigurations: let
     pkgs = appHostPkgs;
   };
   apps = [
-    ./_rekey-save-output.nix
+    ./_rekey-save-outputs.nix
     ./edit-secret.nix
     ./generate-secrets.nix
     ./rekey.nix
