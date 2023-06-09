@@ -49,7 +49,7 @@ nixpkgs: {
     options = {
       dependencies = mkOption {
         type = types.listOf types.unspecified;
-        example = literalExpression ''[ config.age.secrets.basicAuthUser1 config.nixosConfigurations.machine2.age.secrets.basicAuthUser ]'';
+        example = literalExpression ''[ config.age.secrets.basicAuthPw1 nixosConfigurations.machine2.config.age.secrets.basicAuthPw ]'';
         default = [];
         description = mdDoc ''
           Other secrets on which this secret depends. This guarantees that in the final
@@ -63,18 +63,19 @@ nixpkgs: {
           have a generator. This is useful if you want to create derived secrets,
           such as generating a .htpasswd file from several basic auth passwords.
 
-          You can refer to age secret definitions of other systems, as long as they
-          are all passed to agenix-rekey via the nixosConfigurations parameter.
+          You can refer to age secrets of other systems, as long as all relevant systems
+          are passed to the agenix-rekey app definition via the nixosConfigurations parameter.
         '';
       };
       script = mkOption {
         type = types.functionTo types.str;
         example = literalExpression ''
           {
-            name,    # The name of the secret as defined in age.secrets.<name>
-            secret,  # The secret attributes (age.secrets.''${name})
+            name,    # The name of the secret to be generated, as defined in `age.secrets.<name>`
+            secret,  # The definition of the secret to be generated
             lib,     # Convenience access to the nixpkgs library
-            pkgs,    # The package set for the host that is running the script
+            pkgs,    # The package set for the _host that is running the generation script_.
+                     #   Don't use any other packgage set!
             file,    # The actual path to the .age file that will be written after
                      #   this function returns and the content is encrypted.
                      #   Useful to write additional information to adjacent files.
@@ -84,12 +85,12 @@ nixpkgs: {
                      #   `file` is the true source location of the secret's `rekeyFile`.
                      #   You can extract the plaintext with `''${decrypt} ''${escapeShellArg dep.file}`.
             decrypt, # The base rage command that can decrypt secrets to stdout by
-                     #   using the defined masterIdentities.
+                     #   using the defined `masterIdentities`.
             ...      # For future/unused arguments
           }: '''
             ''${pkgs.wireguard-tools}/bin/wg genkey \
               | tee /dev/stdout \
-              | ''${pkgs.wireguard-tools}/bin/wg pubkey > ''${escapeShellArg (removeSuffix ".age" file + ".pub")}
+              | ''${pkgs.wireguard-tools}/bin/wg pubkey > ''${lib.escapeShellArg (lib.removeSuffix ".age" file + ".pub")}
           '''
         '';
         description = mdDoc ''
@@ -210,6 +211,7 @@ in {
           rekeyFile = mkOption {
             type = types.nullOr types.path;
             default = null;
+            example = literalExpression "./secrets/password.age";
             description = mdDoc ''
               The path to the encrypted .age file for this secret. The file must
               be encrypted with one of the given `age.rekey.masterIdentities` and not with
@@ -227,10 +229,10 @@ in {
           generator = mkOption {
             type = types.nullOr (types.either types.str generatorType);
             default = null;
-            example = "alnum";
+            example = "passphrase";
             description = mdDoc ''
               The generator that will be used to create this secret's if it doesn't exist yet.
-              Must be a generator definition like `age.generators.<name>`, or just a string to
+              Must be a generator definition like in `age.generators.<name>`, or just a string to
               refer to one of the global generators in `age.generators`.
 
               Refer to `age.generators.<name>` for more information on defining generators.
@@ -267,7 +269,7 @@ in {
         {
           alnum.script = {pkgs, ...}: "''${pkgs.pwgen}/bin/pwgen -s 48 1";
           aggregateHtpasswd = {
-            dependencies = [ config.age.secrets.basicAuthUser1 config.age.secrets.basicAuthUser2 ];
+            dependencies = [ config.age.secrets.basicAuthPw1 config.age.secrets.basicAuthPw2 ];
             script = { pkgs, lib, decrypt, deps, ... }:
               lib.flip lib.concatMapStrings deps ({ name, host, file }: '''
                 echo "Aggregating "''${lib.escapeShellArg host}:''${lib.escapeShellArg name} >&2
@@ -282,10 +284,10 @@ in {
       description = mdDoc ''
         Allows defining reusable secret generators. By default these generators are provided:
 
-          - `alnum`: Generates an alphanumeric string of length 48
-          - `base64`: Generates a base64 string of 32-byte random (length 44)
-          - `hex`: Generates a hex string of 24-byte random (length 48)
-          - `passphrase`: Generates a 6-word passphrase delimited by spaces
+        - `alnum`: Generates an alphanumeric string of length 48
+        - `base64`: Generates a base64 string of 32-byte random (length 44)
+        - `hex`: Generates a hex string of 24-byte random (length 48)
+        - `passphrase`: Generates a 6-word passphrase delimited by spaces
       '';
     };
 

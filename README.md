@@ -2,40 +2,48 @@
 
 # agenix-rekey
 
-<!--`agenix-rekey` is an extension for [agenix](https://github.com/ryantm/agenix).
-It mainly allows you to get rid of having to maintain a `secrets.nix` file
-You encrypt and store all secrets with your master key, and agenix-rekey
-automatically re-encrypts the secrets for any host that uses it.
+This is an extension for [agenix](https://github.com/ryantm/agenix) which allows you to ged rid
+of maintaining a `secrets.nix` file by re-encrypting secrets where needed.
+It also allows you to define versatile generators for secrets,
+so they can be bootstrapped automatically. This extension is a flakes-only project
+and can be used alongside regular use of agenix.
 
-
-facilitates using a YubiKey
-(or just a master age identity) to store all secrets in your repository, which can be especially useful for
-flakes that manage multiple hosts. This is what you get from using it:
--->
-
-`agenix-rekey` is an extension for [agenix](https://github.com/ryantm/agenix) which facilitates using a YubiKey
-(or just a master age identity) to store all secrets in your repository, which can be especially useful for
-flakes that manage multiple hosts. This is what you get from using it:
+To make use of rekeying, you will have to store secrets in your repository by encrypting
+them with a master key (YubiKey or regular age identity), and agenix-rekey will automatically
+re-encrypt these secrets for any host that requires them. In summary:
 
 - **Single master-key.** Anything in your repository is encrypted by your master YubiKey or age identity.
 - **Host-key deduction.** No need to manually keep track of which key is needed for which host - no `secrets.nix`.
 - **Less secret management.** Rekeyed secrets never have to be added to your flake repository, thus
   you only have to keep track of the actual secret. Also a leaked host-key doesn't allow an attacker to decrypt
   older checked-in secrets, in case your repo is public.
-- **Lazy rekeying.** Rekeying only has to be done if necessary, results are cached in a derivation. If a new secret is added
-  or a host key is changed, you will automatically be prompted to rekey your secrets.
-- **Simplified bootstrapping.** Automatic rekeying will use a dummy pubkey for unknown target hosts,
-  so you can bootstrap a new system for which the pubkey isn't yet known. (Runtime decryption will just fail)
+- **Lazy rekeying.** Rekeying only occurs when necessary, since the results are cached in a local derivation.
+  If a new secret is added or a host key is changed, you will automatically be prompted to rekey.
+- **Simplified host bootstrapping.** Automatic rekeying can use a dummy pubkey for unknown target hosts,
+  so you can bootstrap a new system for which the pubkey isn't yet known. Runtime decryption will of
+  course fail, but then the ssh host key will be generated.
+- **Secret generation.** You can define generators to bootstrap secrets. Very useful if you want random
+  passwords for a service, need random wireguard private/preshared keys, or need to aggregate several
+  secrets into a derived secret (for example by generating a .htpasswd file).
 
-You can read more about [how it works](#how-does-it-work) below. Remarks:
+To function properly, agenix-rekey has to do some nix gymnastics. You can read more about [how it works](#how-does-it-work) below. Remarks:
 
 - Since `age-plugin-yubikey` 0.4.0 the PIN is required only once. Using a password protected master key will never
-  have this benefit, and the password will alwas be required for each rekeying operation. There's no way around that without caching the key, which I didn't want to do.
+  have this benefit, and the password will alwas be required for each rekeying operation.
+  There's no way around that without caching the key, which I didn't want to do.
 
 ## Installation
 
-Add `agenix-rekey` to your flake.nix, add the module to your hosts
-and let agenix-rekey define the necessary apps on your flake:
+First, add agenix-rekey to your `flake.nix`, add the module to your hosts
+and let agenix-rekey define the necessary apps on your flake.
+
+The exposed apps can be called with `nix run .#<appname>`.
+
+- `generate-secrets`: Generates any secrets that don't exist yet and have a generator set.
+- `edit-secret`: Create/edit secrets using `$EDITOR`. Can encrypt existing files.
+- `rekey`: Rekeys secrets for hosts that require them.
+
+Use `nix run .#<appname> -- --help` for specific usage information.
 
 ```nix
 {
@@ -45,9 +53,8 @@ and let agenix-rekey define the necessary apps on your flake:
   # ...
 
   outputs = { self, nixpkgs, agenix, agenix-rekey }: {
-    # change `yourhostname` to your actual hostname
+    # Example system configuration
     nixosConfigurations.yourhostname = nixpkgs.lib.nixosSystem {
-      # change to your system:
       system = "x86_64-linux";
       modules = [
         ./configuration.nix
@@ -123,11 +130,12 @@ need to be adjusted like below.
 ## Usage
 
 Since agenix-rekey is just an extension, everything you know about agenix still applies as usual.
-Look below for instructions on adapting an existing config.
-For new installations, the setup process will be the following:
+Apart from specifying meta information about your master key, the only thing that you have to change
+to use rekeying is to sepcify `rekeyFile` instead of `file`. The full setup process is the following:
 
 1. For each host you have to provide a pubkey for rekeying and select the master identity
-   to use for decrypting. This is probably the same for each host.
+   to use for decrypting. Apart for `hostPubkey`, this is probably the same for each host.
+   If other attributes do differ between hosts, they will usually be merged when invoking the apps.
 
     ```nix
     {
@@ -143,7 +151,7 @@ For new installations, the setup process will be the following:
     ```
 
 2. Encrypt some secrets using (r)age and your master key. `agenix-rekey` defines the `edit-secret` app in your flake,
-   which allows you to edit/create secrets using your favorite `$EDITOR`, and automatically uses the correct identities for de- and encryption.
+   which allows you to easily create/edit secrets using your favorite `$EDITOR`, and automatically uses the correct identities for de- and encryption.
 
     ```bash
     # Create new or edit existing secret
@@ -160,24 +168,139 @@ For new installations, the setup process will be the following:
    Be careful when chosing your `$EDITOR` here, it might leak secret information when editing the file
    by means of undo-history, or caching in general. For `vim` and `nvim` this app automatically disables related options.
 
-3. Add and use the secret to your config
+3. Define and use the secret in your config
 
     ```nix
     {
-      # Note that the option is called `rekeyFile` and not `file` if you want to use rekeying.
+      # Note that the option is called `rekeyFile` and not `file` if you want to use rekeying!
       age.secrets.secret1.rekeyFile = ./secret1.age;
       users.users.user1.passwordFile = config.age.secrets.secret1.path;
     }
     ```
 
-4. Run `nixos-rebuild` or use your deployment tools as usual. If you need to rekey,
-   you will be prompted to do that as a build failure will be triggered.
+4. Deploy you system as usual by using `nixos-rebuild` or your favourite deployment tool.
+   In case you need to rekey, you will be prompted to do that as part of a build failure that will be triggered.
 
    If you are deploying your configuration to remote systems, you need to make sure that
-   the correct derivation containing the rekeyed secrets is copied to the remote host's store.
+   the correct derivation containing the rekeyed secrets is copied from your local store
+   to the remote host's store.
 
    - [colmena](https://github.com/zhaofengli/colmena) automatically [copies](https://github.com/zhaofengli/colmena/issues/134) locally available derivations, so no additional care has to be taken here
    - I didn't test other tools. Please add your experiences here.
+
+## Secret generation
+
+With agenix-rekey, you can define generators on your secrets which can be used
+to bootstrap secrets or derive secrets from other secrets.
+
+In the simplest cases you can refer to a predefined existing generator,
+the example below would generate a random 6 word passphrase using the
+`age.generators.passphrase` generator:
+
+```nix
+{
+  age.secrets.randomPassword = {
+    rekeyFile = ./secrets/randomPassword.age;
+    generator = "passphrase";
+  };
+}
+```
+
+You can also define your own generators, either by creating an entry in `age.generators`
+to make a reusable generator like `"passphrase"` above, or directly by setting
+`age.secrets.<name>.generator` to a generator definition.
+
+A generator is a set consisting of two attributes, a `script` and optionally `dependencies`.
+The `script` must be a function taking some arguments in an attrset and has to return a bash
+script, which writes the desired secret to stdout. A very simple (and bad) generator would
+be `{ ... }: "echo very-secret"`.
+
+The arguments passed to the `script` will contain some useful attributes that we
+can use to define our generation script.
+
+| Argument | Description |
+|-----|-----|
+| `name`    | The name of the secret to be generated, as defined in `age.secrets.<name>` |
+| `secret`  | The definition of the secret to be generated |
+| `lib`     | Convenience access to the nixpkgs library |
+| `pkgs`    | The package set for the _host that is running the generation script_. Don't use any other packgage set in the script! |
+| `file`    | The actual path to the .age file that will be written after this function returns and the content is encrypted. Useful to write additional information to adjacent files. |
+| `deps`    | The list of all secret files from our `dependencies`. Each entry is a set of `{ name, host, file }`, corresponding to the secret `nixosConfigurations.${host}.age.secrets.${name}`. `file` is the true source location of the secret's `rekeyFile`. You can extract the plaintext with `${decrypt} ${escapeShellArg dep.file}`.
+| `decrypt` | The base rage command that can decrypt secrets to stdout by using the defined `masterIdentities`.
+| `...`     | For future/unused arguments
+
+
+First let's have a look at defining a very simple generator that creates longer passphrases.
+Notice how we use the passed `pkgs` set instead of the package set from the config.
+
+```nix
+{
+  age.secrets.generators.long-passphrase = {
+    rekeyFile = ./secrets/randomPassword.age;
+    generator.script = {pkgs, ...}: "${pkgs.xkcdpass}/bin/xkcdpass --numwords=10";
+  };
+}
+```
+
+Another common case is generating secret keys, for which we also directly want to
+derive the matching public keys and store them in an adjacent `.pub` file:
+
+```nix
+{
+  age.secrets.generators.wireguard-priv = {
+    rekeyFile = ./secrets/wg-priv.age;
+    generator.script = {pkgs, file, ...}: ''
+      ${pkgs.wireguard-tools}/bin/wg genkey \
+        | tee /dev/stdout \
+        | ${pkgs.wireguard-tools}/bin/wg pubkey > ${lib.escapeShellArg (lib.removeSuffix ".age" file + ".pub")}
+    '';
+  };
+}
+```
+
+By utilizing `deps` and `decrypt`, we can also generate secrets that depend on the value of other secrets.
+You might encounter this when you want to generate a `.htpasswd` file from several cleartext passwords
+which are also generated automatically:
+
+```nix
+{
+  # Generate a random password
+  age.secrets.generators.basic-auth-pw = {
+    rekeyFile = ./secrets/basic-auth-pw.age;
+    generator = "alnum";
+  };
+
+  # Generate a htpasswd from several random passwords
+  age.secrets.generators.some-htpasswd = {
+    rekeyFile = ./secrets/htpasswd.age;
+    generator = {
+      # All these secrets will be generated first and their paths are
+      # passed to the `script` as `deps` when this secret is being generated.
+      # You can refer to age secrets of other systems, as long as all relevant systems
+      # are passed to the agenix-rekey app definition via the nixosConfigurations parameter.
+      dependencies = [
+        # A local secret
+        config.age.secrets.basic-auth-pw
+        # Secrets from other machines
+        nixosConfigurations.machine2.config.age.secrets.basic-auth-pw
+        nixosConfigurations.machine3.config.age.secrets.basic-auth-pw
+      ];
+      script = { pkgs, lib, decrypt, deps, ... }:
+        # For each dependency, we can use `decrypt` to get the plaintext.
+        # We run that through apache's htpasswd to create a htpasswd entry.
+        # Since all commands output to stdout, we automatically have a valid
+        # htpasswd file afterwards.
+        lib.flip lib.concatMapStrings deps ({ name, host, file }: ''
+          echo "Aggregating "''${lib.escapeShellArg host}:''${lib.escapeShellArg name} >&2
+          # Decrypt the dependency containing the cleartext password,
+          # and run it through htpasswd to generate a bcrypt hash
+          ${decrypt} ${lib.escapeShellArg file} \
+            | ${pkgs.apacheHttpd}/bin/htpasswd -niBC 10 ${lib.escapeShellArg host}
+        '');
+    };
+  };
+}
+```
 
 ## How does it work?
 
@@ -215,7 +338,7 @@ your local store.
 
 These are the secret options exposed by agenix. See [`age.secrets`](https://github.com/ryantm/agenix#reference)
 for a description of all base attributes. In the following you
-will see documentation for additional options added by agenix-rekey.
+will read documentation for additional options added by agenix-rekey.
 
 ## `age.secrets.<name>.rekeyFile`
 
@@ -234,6 +357,72 @@ is mutually exclusive with specifying `file` directly.
 
 If you want to avoid having a `secrets.nix` file and only use rekeyed secrets,
 you should always use this option instead of `file`.
+
+## `age.secrets.<name>.generator`
+
+| Type    | `nullOr (either str generatorType)` |
+|-----|-----|
+| Default | `null` |
+| Example | `"passphrase"` |
+
+The generator that will be used to create this secret's if it doesn't exist yet.
+Must be a generator definition like in `age.generators.<name>`, or just a string to
+refer to one of the global generators in `age.generators`.
+
+Refer to `age.generators.<name>` for more information on defining generators.
+
+## `age.generators`
+
+| Type    | `attrsOf generatorType` |
+|-----|-----|
+| Default | Defines some common password generators. See source. |
+| Example | See source or [Secret generation](#secret-generation). |
+
+Allows defining reusable secret generators. By default these generators are provided:
+
+- `alnum`: Generates an alphanumeric string of length 48
+- `base64`: Generates a base64 string of 32-byte random (length 44)
+- `hex`: Generates a hex string of 24-byte random (length 48)
+- `passphrase`: Generates a 6-word passphrase delimited by spaces
+
+## `age.generators.<name>.dependencies`
+
+| Type    | `listOf unspecified` |
+|-----|-----|
+| Default | `[]` |
+| Example | `[ config.age.secrets.basicAuthPw1 nixosConfigurations.machine2.config.age.secrets.basicAuthPw ]` |
+
+Other secrets on which this secret depends. This guarantees that in the final
+`nix run .#generate-secrets` script, all dependencies will be generated before
+this secret is generated, allowing you use their outputs via the passed `decrypt` function.
+
+The given dependencies will be passed to the defined `script` via the `deps` parameter,
+which will be a list of their true source locations (`rekeyFile`) in no particular order.
+
+This should refer only to secret definitions from `config.age.secrets` that
+have a generator. This is useful if you want to create derived secrets,
+such as generating a .htpasswd file from several basic auth passwords.
+
+You can refer to age secrets of other systems, as long as all relevant systems
+are passed to the agenix-rekey app definition via the nixosConfigurations parameter.
+
+## `age.generators.<name>.script`
+
+| Type    | `types.functionTo types.str` |
+|-----|-----|
+| Example | See source or [Secret generation](#secret-generation). |
+
+This must be a function that evaluates to a script. This script will be
+added to the global generation script verbatim and runs outside of any sandbox.
+Refer to `age.generators` for example usage.
+
+This allows you to create/overwrite adjacent files if neccessary, for example
+when you also want to store the public key for a generated private key.
+Refer to the example for a description of the arguments. The resulting
+secret should be written to stdout and any info or errors to stderr.
+
+Note that the script is run with `set -euo pipefail` conditions as the
+normal user that runs `nix run .#generate-secrets`.
 
 ## `age.rekey.forceRekeyOnSystem`
 

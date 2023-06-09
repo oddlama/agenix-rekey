@@ -89,6 +89,11 @@
 
         ${rageMasterEncrypt} -o ${escapeShellArg secret.sourceFile} <<< "$content" \
           || die "Failed to generate or encrypt secret."
+
+        if [[ "$ADD_TO_GIT" == true ]]; then
+          git add ${escapeShellArg secret.sourceFile} \
+            || die "Failed to add generated secret to git"
+        fi
       else
         echo "[90mSkipping existing secret "${escapeShellArg secret.sourceFile}" ("${concatStringsSep "', '" (map escapeShellArg secret.defs)}")[m"
       fi
@@ -118,9 +123,11 @@ in
       echo 'OPTIONS:'
       echo '-h, --help                Show help'
       echo '-f, --force-generate      Force generating existing secrets'
+      echo '-a, --add-to-git          Add generated secrets to git via git add.'
     }
 
     FORCE_GENERATE=false
+    ADD_TO_GIT=false
     POSITIONAL_ARGS=()
     while [[ $# -gt 0 ]]; do
       case "$1" in
@@ -130,6 +137,9 @@ in
           ;;
         "--force-generate"|"-f")
           FORCE_GENERATE=true
+          ;;
+        "--add-to-git"|"-a")
+          ADD_TO_GIT=true
           ;;
         "--")
           shift
