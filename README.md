@@ -12,17 +12,17 @@ To make use of rekeying, you will have to store secrets in your repository by en
 them with a master key (YubiKey or regular age identity), and agenix-rekey will automatically
 re-encrypt these secrets for any host that requires them. In summary:
 
-- **Single master-key.** Anything in your repository is encrypted by your master YubiKey or age identity.
-- **Host-key deduction.** No need to manually keep track of which key is needed for which host - no `secrets.nix`.
-- **Less secret management.** Rekeyed secrets never have to be added to your flake repository, thus
+- 🔑 **Single master-key.** Anything in your repository is encrypted by your master YubiKey or age identity.
+- ➡️ **Host-key inference.** No need to manually keep track of which key is needed for which host - no `secrets.nix`.
+- ✔️ **Less secret management.** Rekeyed secrets never have to be added to your flake repository, thus
   you only have to keep track of the actual secret. Also a leaked host-key doesn't allow an attacker to decrypt
   older checked-in secrets, in case your repo is public.
-- **Lazy rekeying.** Rekeying only occurs when necessary, since the results are cached in a local derivation.
+- 🦥 **Lazy rekeying.** Rekeying only occurs when necessary, since the results are cached in a local derivation.
   If a new secret is added or a host key is changed, you will automatically be prompted to rekey.
-- **Simplified host bootstrapping.** Automatic rekeying can use a dummy pubkey for unknown target hosts,
+- 🚀 **Simplified host bootstrapping.** Automatic rekeying can use a dummy pubkey for unknown target hosts,
   so you can bootstrap a new system for which the pubkey isn't yet known. Runtime decryption will of
   course fail, but then the ssh host key will be generated.
-- **Secret generation.** You can define generators to bootstrap secrets. Very useful if you want random
+- 🔐 **Secret generation.** You can define generators to bootstrap secrets. Very useful if you want random
   passwords for a service, need random wireguard private/preshared keys, or need to aggregate several
   secrets into a derived secret (for example by generating a .htpasswd file).
 
