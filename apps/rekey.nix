@@ -21,16 +21,26 @@
     rageHostEncrypt
     ;
 
-  rekeyCommandsForHost = hostName: hostAttrs: let
+  # The derivation containing the resulting rekeyed secrets for
+  # the given host configuration
+  derivationFor = hostCfg:
+    import ../nix/output-derivation.nix {
+      appHostPkgs = pkgs;
+      hostConfig = hostCfg.config;
+    };
+
+  showOutPath = _: hostCfg: "echo ${escapeShellArg (derivationFor hostCfg).drv}";
+
+  rekeyCommandsForHost = hostName: hostCfg: let
     # The derivation containing the resulting rekeyed secrets
     rekeyedSecrets = import ../nix/output-derivation.nix {
       appHostPkgs = pkgs;
-      hostConfig = hostAttrs.config;
+      hostConfig = hostCfg.config;
     };
     # We need to know where this derivation expects the rekeyed secrets to be stored
     inherit (rekeyedSecrets) tmpSecretsDir;
     # All secrets that have rekeyFile set. These will be rekeyed.
-    secretsToRekey = filterAttrs (_: v: v.rekeyFile != null) hostAttrs.config.age.secrets;
+    secretsToRekey = filterAttrs (_: v: v.rekeyFile != null) hostCfg.config.age.secrets;
 
     # Finally, the command that rekeys a given secret.
     rekeyCommand = secretName: secret: let
@@ -38,7 +48,7 @@
     in ''
       echo "Rekeying ${secretName} for host ${hostName}"
       if ! decrypt ${escapeShellArg secret.rekeyFile} ${escapeShellArg secretName} ${escapeShellArg hostName} \
-        | ${rageHostEncrypt hostAttrs} -o ${escapeShellArg secretOut}; then
+        | ${rageHostEncrypt hostCfg} -o ${escapeShellArg secretOut}; then
         echo "[1;31mFailed to re-encrypt ${secret.rekeyFile} for ${hostName}![m" >&2
       fi
     '';
@@ -54,6 +64,7 @@ in
   pkgs.writeShellScript "rekey" ''
     set -euo pipefail
 
+    function die() { echo "[1;31merror:[m $*" >&2; exit 1; }
     function show_help() {
       echo 'app rekey - Re-encrypts secrets for hosts that require them'
       echo ""
@@ -61,13 +72,28 @@ in
       echo ""
       echo 'OPTIONS:'
       echo '-h, --help                Show help'
+      echo '-d, --dummy               Always create dummy secrets when rekeying, which'
+      echo '                            can be useful for testing builds in a CI'
+      echo '    --show-out-paths      Instead of rekeying, show the output paths of all resulting'
+      echo '                            derivations, one path per host. The paths may not yet exist'
+      echo '                            if secrets were not rekeyed recently.'
     }
 
+    function show_out_paths() {
+      ${concatStringsSep "\n" (mapAttrsToList showOutPath nixosConfigurations)}
+    }
+
+    DUMMY=false
     while [[ $# -gt 0 ]]; do
       case "$1" in
         "help"|"--help"|"-help"|"-h")
           show_help
           exit 1
+          ;;
+        "-d"|"--dummy") DUMMY=true ;;
+        "--show-out-paths")
+          show_out_paths
+          exit 0
           ;;
         *) die "Invalid option '$1'" ;;
       esac
@@ -94,6 +120,11 @@ in
       local secret_name=$2
       local hostname=$3
       shift 3
+
+      if [[ "$DUMMY" == true ]]; then
+        echo "This is a dummy replacement value. The actual secret age.secrets.$secret_name.rekeyFile ($secret_file) was not rekeyed because --dummy was used."
+        return
+      fi
 
       # Outer loop, allows us to retry the command
       while true; do
