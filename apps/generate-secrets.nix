@@ -7,19 +7,24 @@
 } @ inputs: let
   inherit
     (lib)
+    any
     assertMsg
     attrNames
     attrValues
     concatStringsSep
     escapeShellArg
+    filter
     flip
     foldl'
     hasAttr
     hasPrefix
+    head
+    length
     mapAttrs
     nameValuePair
     removePrefix
     stringsWithDeps
+    warnIf
     ;
 
   inherit
@@ -35,6 +40,21 @@
     assert assertMsg (hasPrefix userFlakeDir fileStr) "Cannot generate ${fileStr} as it isn't a direct subpath of the flake directory ${userFlakeDir}, meaning this script cannot determine its true origin!";
       "." + removePrefix userFlakeDir fileStr;
 
+  # Finds the host where the given secret is defines. Matches
+  # based on secret.id and secret.rekeyFile. If multiple matches
+  # exist, a warning is issued and the first is returned.
+  findHost = secret: let
+    matchingHosts =
+      filter
+      (host:
+        any
+        (s: s.id == secret.id && s.rekeyFile == secret.rekeyFile)
+        (attrValues nixosConfigurations.${host}.config.age.secrets))
+      (attrNames nixosConfigurations);
+  in
+    warnIf (length matchingHosts > 1) "Multiple hosts provide a secret with rekeyFile=[33m${toString secret.rekeyFile}[m, which may have undesired side effects when used in secret generator dependencies."
+    (head matchingHosts);
+
   # Add the given secret to the set, indexed by its relative path.
   # If the path already exists, this makes sure that the definition is the same.
   addGeneratedSecretChecked = host: set: secretName: let
@@ -47,8 +67,8 @@
       decrypt = rageMasterDecrypt;
       deps = flip map secret._generator.dependencies (dep:
         assert assertMsg (dep._generator != null)
-        "${host}.config.age.secrets.${secretName}: A given dependency is a secret without a generator."; {
-          inherit host;
+        "The given dependency with rekeyFile=${dep.rekeyFile} is a secret without a generator."; {
+          host = findHost dep;
           name = dep.id;
           file = relativeToFlake dep.rekeyFile;
         });
