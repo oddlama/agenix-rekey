@@ -29,7 +29,7 @@
       hostConfig = hostCfg.config;
     };
 
-  showOutPath = _: hostCfg: "echo ${escapeShellArg (derivationFor hostCfg).drv}";
+  showOutPath = _: hostCfg: "echo ${escapeShellArg (builtins.unsafeDiscardStringContext (toString (derivationFor hostCfg).drv))}";
 
   rekeyCommandsForHost = hostName: hostCfg: let
     # The derivation containing the resulting rekeyed secrets
