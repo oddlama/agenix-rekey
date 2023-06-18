@@ -101,7 +101,19 @@
   # The command that actually generates a secret.
   secretGenerationCommand = secret: ''
     if wants_secret ${escapeShellArg secret.sourceFile} ; then
-      if [[ ! -e ${escapeShellArg secret.sourceFile} ]] || [[ "$FORCE_GENERATE" == true ]]; then
+      # If the secret has dependencies, force regeneration if any
+      # dependency was modified since its last generation
+      dep_mtimes=(
+        1 # Have at least one entry
+        ${concatStringsSep "\n" (flip map secret.secret._generator.dependencies (dep:
+          "\"$(stat -c %Y ${escapeShellArg (relativeToFlake dep.rekeyFile)} 2>/dev/null || echo 1)\""
+        ))}
+      )
+      mtime_newest_dep=$(IFS=$'\n'; sort -nr <<< "''${dep_mtimes[*]}" | head -n1)
+      mtime_this=$(stat -c %Y ${escapeShellArg secret.sourceFile} 2>/dev/null || echo 0)
+
+      # Regenerate if the file doesn't exist, any dependency is newer, or we should force regeneration
+      if [[ ! -e ${escapeShellArg secret.sourceFile} ]] || [[ "$mtime_newest_dep" -gt "$mtime_this" ]] || [[ "$FORCE_GENERATE" == true ]]; then
         echo "Generating secret [34m"${escapeShellArg secret.sourceFile}"[m [90m("${concatStringsSep "', '" (map escapeShellArg secret.defs)}")[m"
         content=$(
           ${secret.script}
