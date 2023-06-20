@@ -259,12 +259,6 @@ in {
 
     generators = mkOption {
       type = types.attrsOf generatorType;
-      default = {
-        alnum.script = {pkgs, ...}: "${pkgs.pwgen}/bin/pwgen -s 48 1";
-        base64.script = {pkgs, ...}: "${pkgs.openssl}/bin/openssl rand -base64 32";
-        hex.script = {pkgs, ...}: "${pkgs.openssl}/bin/openssl rand -hex 24";
-        passphrase.script = {pkgs, ...}: "${pkgs.xkcdpass}/bin/xkcdpass --numwords=6 --delimiter=' '";
-      };
       example = ''
         {
           alnum.script = {pkgs, ...}: "''${pkgs.pwgen}/bin/pwgen -s 48 1";
@@ -391,5 +385,12 @@ in {
         '';
       };
     };
+  };
+
+  config.age.generators = {
+    alnum.script = {pkgs, ...}: "${pkgs.pwgen}/bin/pwgen -s 48 1";
+    base64.script = {pkgs, ...}: "${pkgs.openssl}/bin/openssl rand -base64 32";
+    hex.script = {pkgs, ...}: "${pkgs.openssl}/bin/openssl rand -hex 24";
+    passphrase.script = {pkgs, ...}: "${pkgs.xkcdpass}/bin/xkcdpass --numwords=6 --delimiter=' '";
   };
 }
