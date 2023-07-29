@@ -21,7 +21,6 @@ nixpkgs: {
     mapAttrs
     mapAttrs'
     mapAttrsToList
-    mdDoc
     mkIf
     mkOption
     mkRenamedOptionModule
@@ -45,13 +44,13 @@ nixpkgs: {
     hostConfig = config;
   };
 
-  generatorType = types.submodule {
+  generatorType = types.submodule (submod: {
     options = {
       dependencies = mkOption {
         type = types.listOf types.unspecified;
         example = literalExpression ''[ config.age.secrets.basicAuthPw1 nixosConfigurations.machine2.config.age.secrets.basicAuthPw ]'';
         default = [];
-        description = mdDoc ''
+        description = ''
           Other secrets on which this secret depends. This guarantees that in the final
           `nix run .#generate-secrets` script, all dependencies will be generated before
           this secret is generated, allowing you use their outputs via the passed `decrypt` function.
@@ -67,8 +66,9 @@ nixpkgs: {
           are passed to the agenix-rekey app definition via the nixosConfigurations parameter.
         '';
       };
+
       script = mkOption {
-        type = types.functionTo types.str;
+        type = types.either types.str (types.functionTo types.str);
         example = literalExpression ''
           {
             name,    # The name of the secret to be generated, as defined in `age.secrets.<name>`
@@ -93,10 +93,11 @@ nixpkgs: {
             echo "$priv"
           '''
         '';
-        description = mdDoc ''
-          This must be a function that evaluates to a script. This script will be
-          added to the global generation script verbatim and runs outside of any sandbox.
-          Refer to `age.generators` for example usage.
+        description = ''
+          This must either be the name of a globally defined generator, or
+          a function that evaluates to a script. The resulting script will be
+          added to the internal, global generation script verbatim and runs
+          outside of any sandbox. Refer to `age.generators` for example usage.
 
           This allows you to create/overwrite adjacent files if neccessary, for example
           when you also want to store the public key for a generated private key.
@@ -107,8 +108,19 @@ nixpkgs: {
           normal user that runs `nix run .#generate-secrets`.
         '';
       };
+
+      _script = mkOption {
+        type = types.nullOr types.unspecified;
+        readOnly = true;
+        internal = true;
+        description = "The effective script definition.";
+        default =
+          if isString submod.config.script
+          then config.age.generators.${submod.config.script}
+          else submod.config.script;
+      };
     };
-  };
+  });
 in {
   config = {
     assertions =
@@ -205,14 +217,14 @@ in {
             type = types.str;
             default = submod.config._module.args.name;
             readOnly = true;
-            description = mdDoc "The true identifier of this secret as used in `age.secrets`.";
+            description = "The true identifier of this secret as used in `age.secrets`.";
           };
 
           rekeyFile = mkOption {
             type = types.nullOr types.path;
             default = null;
             example = literalExpression "./secrets/password.age";
-            description = mdDoc ''
+            description = ''
               The path to the encrypted .age file for this secret. The file must
               be encrypted with one of the given `age.rekey.masterIdentities` and not with
               a host-specific key.
@@ -227,27 +239,10 @@ in {
           };
 
           generator = mkOption {
-            type = types.nullOr (types.either types.str generatorType);
+            type = types.nullOr generatorType;
             default = null;
-            example = "passphrase";
-            description = mdDoc ''
-              The generator that will be used to create this secret's if it doesn't exist yet.
-              Must be a generator definition like in `age.generators.<name>`, or just a string to
-              refer to one of the global generators in `age.generators`.
-
-              Refer to `age.generators.<name>` for more information on defining generators.
-            '';
-          };
-
-          _generator = mkOption {
-            type = types.nullOr types.unspecified;
-            readOnly = true;
-            internal = true;
-            description = "The effective generator definition, if any.";
-            default =
-              if isString submod.config.generator
-              then config.age.generators.${submod.config.generator}
-              else submod.config.generator;
+            example = { script = "passphrase"; };
+            description = "If defined, this generator will be used to bootstrap this secret's when it doesn't exist.";
           };
         };
         config = {
@@ -258,37 +253,42 @@ in {
     };
 
     generators = mkOption {
-      type = types.attrsOf generatorType;
+      type = types.attrsOf (types.functionTo types.str);
       example = ''
         {
-          alnum.script = {pkgs, ...}: "''${pkgs.pwgen}/bin/pwgen -s 48 1";
-          aggregateHtpasswd = {
-            dependencies = [ config.age.secrets.basicAuthPw1 config.age.secrets.basicAuthPw2 ];
-            script = { pkgs, lib, decrypt, deps, ... }:
-              lib.flip lib.concatMapStrings deps ({ name, host, file }: '''
-                echo "Aggregating "''${lib.escapeShellArg host}:''${lib.escapeShellArg name} >&2
-                # Decrypt the dependency containing the cleartext password,
-                # and run it through htpasswd to generate a bcrypt hash
-                ''${decrypt} ''${lib.escapeShellArg file} \
-                  | ''${pkgs.apacheHttpd}/bin/htpasswd -niBC 10 ''${lib.escapeShellArg host}
-              ''');
+          alnum = {pkgs, ...}: "''${pkgs.pwgen}/bin/pwgen -s 48 1";
+
+          # when using this, add some dependencies:
+          # age.secrets.<name>.generator = {
+          #   script = "aggregateHtpasswd";
+          #   dependencies = [ config.age.secrets.basicAuthPw1 config.age.secrets.basicAuthPw2 ];
+          # };
+          aggregateHtpasswd = { pkgs, lib, decrypt, deps, ... }:
+            lib.flip lib.concatMapStrings deps ({ name, host, file }: '''
+              echo "Aggregating "''${lib.escapeShellArg host}:''${lib.escapeShellArg name} >&2
+              # Decrypt the dependency containing the cleartext password,
+              # and run it through htpasswd to generate a bcrypt hash
+              ''${decrypt} ''${lib.escapeShellArg file} \
+                | ''${pkgs.apacheHttpd}/bin/htpasswd -niBC 10 ''${lib.escapeShellArg host}
+            ''');
           };
         }
       '';
-      description = mdDoc ''
-        Allows defining reusable secret generators. By default these generators are provided:
+      description = ''
+        Allows defining reusable secret generator scripts. By default these generators are provided:
 
         - `alnum`: Generates an alphanumeric string of length 48
         - `base64`: Generates a base64 string of 32-byte random (length 44)
         - `hex`: Generates a hex string of 24-byte random (length 48)
         - `passphrase`: Generates a 6-word passphrase delimited by spaces
+        - `dhparams`: Generates 4096-bit dhparams
       '';
     };
 
     rekey = {
       forceRekeyOnSystem = mkOption {
         type = types.nullOr types.str;
-        description = mdDoc ''
+        description = ''
           If set, this will force that all secrets are rekeyed on a system of the given architecture.
           This is important if you have several hosts with different architectures, since you usually
           don't want to build the derivation containing the rekeyed secrets on a random remote host.
@@ -319,7 +319,7 @@ in {
             then readFile x
             else x)
           str;
-        description = mdDoc ''
+        description = ''
           The age public key to use as a recipient when rekeying. This either has to be the
           path to an age public key file, or the public key itself in string form.
 
@@ -339,7 +339,7 @@ in {
       };
       masterIdentities = mkOption {
         type = with types; listOf (coercedTo path toString str);
-        description = mdDoc ''
+        description = ''
           The list of age identities that will be presented to `rage` when decrypting the stored secrets
           to rekey them for your host(s). If multiple identities are given, they will be tried in-order.
 
@@ -362,7 +362,7 @@ in {
       };
       extraEncryptionPubkeys = mkOption {
         type = with types; listOf (coercedTo path toString str);
-        description = mdDoc ''
+        description = ''
           When using `nix run .#edit-secret FILE`, the file will be encrypted for all identities in
           rekey.masterIdentities by default. Here you can specify an extra set of pubkeys for which
           all secrets should also be encrypted. This is useful in case you want to have a backup indentity
@@ -377,7 +377,7 @@ in {
       agePlugins = mkOption {
         type = types.listOf types.package;
         default = [rekeyHostPkgs.age-plugin-yubikey];
-        description = mdDoc ''
+        description = ''
           A list of plugins that should be available to rage while rekeying.
           They will be added to the PATH with lowest-priority before rage is invoked,
           meaning if you have the plugin installed on your system, that one is preferred
@@ -388,9 +388,10 @@ in {
   };
 
   config.age.generators = {
-    alnum.script = {pkgs, ...}: "${pkgs.pwgen}/bin/pwgen -s 48 1";
-    base64.script = {pkgs, ...}: "${pkgs.openssl}/bin/openssl rand -base64 32";
-    hex.script = {pkgs, ...}: "${pkgs.openssl}/bin/openssl rand -hex 24";
-    passphrase.script = {pkgs, ...}: "${pkgs.xkcdpass}/bin/xkcdpass --numwords=6 --delimiter=' '";
+    alnum = {pkgs, ...}: "${pkgs.pwgen}/bin/pwgen -s 48 1";
+    base64 = {pkgs, ...}: "${pkgs.openssl}/bin/openssl rand -base64 32";
+    hex = {pkgs, ...}: "${pkgs.openssl}/bin/openssl rand -hex 24";
+    passphrase = {pkgs, ...}: "${pkgs.xkcdpass}/bin/xkcdpass --numwords=6 --delimiter=' '";
+    dhparams = {pkgs, ...}: "${pkgs.openssl}/bin/openssl dhparam 4096";
   };
 }

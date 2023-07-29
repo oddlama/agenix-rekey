@@ -60,13 +60,13 @@
   addGeneratedSecretChecked = host: set: secretName: let
     secret = nixosConfigurations.${host}.config.age.secrets.${secretName};
     sourceFile = relativeToFlake secret.rekeyFile;
-    script = secret._generator.script {
+    script = secret.generator._script {
       inherit secret pkgs lib;
       file = sourceFile;
       name = secretName;
       decrypt = rageMasterDecrypt;
-      deps = flip map secret._generator.dependencies (dep:
-        assert assertMsg (dep._generator != null)
+      deps = flip map secret.generator.dependencies (dep:
+        assert assertMsg (dep.generator != null)
         "The given dependency with rekeyFile=${dep.rekeyFile} is a secret without a generator."; {
           host = findHost dep;
           name = dep.id;
@@ -75,7 +75,7 @@
     };
   in
     # Filter secrets that don't need to be generated
-    if secret._generator == null
+    if secret.generator == null
     then set
     else
       # Assert that the generator is the same if it was defined on multiple hosts
@@ -105,7 +105,7 @@
       # dependency was modified since its last generation
       dep_mtimes=(
         1 # Have at least one entry
-        ${concatStringsSep "\n" (flip map secret.secret._generator.dependencies (dep:
+        ${concatStringsSep "\n" (flip map secret.secret.generator.dependencies (dep:
           "\"$(stat -c %Y ${escapeShellArg (relativeToFlake dep.rekeyFile)} 2>/dev/null || echo 1)\""
         ))}
       )
@@ -139,7 +139,7 @@
     stages = flip mapAttrs secretsWithGenerators (i: secret:
       stringsWithDeps.fullDepEntry
       (secretGenerationCommand secretsWithGenerators.${i})
-      (map (x: relativeToFlake x.rekeyFile) secretsWithGenerators.${i}.secret._generator.dependencies));
+      (map (x: relativeToFlake x.rekeyFile) secretsWithGenerators.${i}.secret.generator.dependencies));
   in
     stringsWithDeps.textClosureMap (x: x) stages (attrNames stages);
 in

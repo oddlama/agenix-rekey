@@ -201,7 +201,7 @@ the example below would generate a random 6 word passphrase using the
 {
   age.secrets.randomPassword = {
     rekeyFile = ./secrets/randomPassword.age;
-    generator = "passphrase";
+    generator.script = "passphrase";
   };
 }
 ```
@@ -210,10 +210,11 @@ You can also define your own generators, either by creating an entry in `age.gen
 to make a reusable generator like `"passphrase"` above, or directly by setting
 `age.secrets.<name>.generator` to a generator definition.
 
-A generator is a set consisting of two attributes, a `script` and optionally `dependencies`.
-The `script` must be a function taking some arguments in an attrset and has to return a bash
-script, which writes the desired secret to stdout. A very simple (and bad) generator would
-be `{ ... }: "echo very-secret"`.
+A generator is a set consisting of two attributes, a `script` and optionally some `dependencies`.
+The `script` must either be a string referring to one of the globally defined generators,
+or a function. This function receives an attrset with arguments and has to return a bash
+script, which acutally generates and writes the desired secret to stdout.
+A very simple (and bad) generator would thus be `{ ... }: "echo very-secret"`.
 
 The arguments passed to the `script` will contain some useful attributes that we
 can use to define our generation script.
@@ -236,7 +237,7 @@ Notice how we use the passed `pkgs` set instead of the package set from the conf
 ```nix
 {
   # Allows you to use "long-passphrase" as a generator.
-  age.generators.long-passphrase.script = {pkgs, ...}: "${pkgs.xkcdpass}/bin/xkcdpass --numwords=10";
+  age.generators.long-passphrase = {pkgs, ...}: "${pkgs.xkcdpass}/bin/xkcdpass --numwords=10";
 }
 ```
 
@@ -245,7 +246,7 @@ derive the matching public keys and store them in an adjacent `.pub` file:
 
 ```nix
 {
-  age.generators.wireguard-priv.script = {pkgs, file, ...}: ''
+  age.generators.wireguard-priv = {pkgs, file, ...}: ''
     priv=$(${pkgs.wireguard-tools}/bin/wg genkey)
     ${pkgs.wireguard-tools}/bin/wg pubkey <<< "$priv" > ${lib.escapeShellArg (lib.removeSuffix ".age" file + ".pub")}
     echo "$priv"
@@ -262,7 +263,7 @@ which are also generated automatically:
   # Generate a random password
   age.secrets.basic-auth-pw = {
     rekeyFile = ./secrets/basic-auth-pw.age;
-    generator = "alnum";
+    generator.script = "alnum";
   };
 
   # Generate a htpasswd from several random passwords
@@ -358,29 +359,11 @@ you should always use this option instead of `file`.
 | Type    | `nullOr (either str generatorType)` |
 |-----|-----|
 | Default | `null` |
-| Example | `"passphrase"` |
+| Example | `{ script = "passphrase"; }` |
 
-The generator that will be used to create this secret's if it doesn't exist yet.
-Must be a generator definition like in `age.generators.<name>`, or just a string to
-refer to one of the global generators in `age.generators`.
+If defined, this generator will be used to bootstrap this secret's when it doesn't exist.
 
-Refer to `age.generators.<name>` for more information on defining generators.
-
-## `age.generators`
-
-| Type    | `attrsOf generatorType` |
-|-----|-----|
-| Default | Defines some common password generators. See source. |
-| Example | See source or [Secret generation](#secret-generation). |
-
-Allows defining reusable secret generators. By default these generators are provided:
-
-- `alnum`: Generates an alphanumeric string of length 48
-- `base64`: Generates a base64 string of 32-byte random (length 44)
-- `hex`: Generates a hex string of 24-byte random (length 48)
-- `passphrase`: Generates a 6-word passphrase delimited by spaces
-
-## `age.generators.<name>.dependencies`
+## `age.secrets.<name>.generator.dependencies`
 
 | Type    | `listOf unspecified` |
 |-----|-----|
@@ -401,15 +384,16 @@ such as generating a .htpasswd file from several basic auth passwords.
 You can refer to age secrets of other systems, as long as all relevant systems
 are passed to the agenix-rekey app definition via the nixosConfigurations parameter.
 
-## `age.generators.<name>.script`
+## `age.secrets.<name>.generator.script`
 
-| Type    | `types.functionTo types.str` |
+| Type    | `either str (functionTo str)` |
 |-----|-----|
 | Example | See source or [Secret generation](#secret-generation). |
 
-This must be a function that evaluates to a script. This script will be
-added to the global generation script verbatim and runs outside any sandbox.
-Refer to `age.generators` for example usage.
+This must either be the name of a globally defined generator, or
+a function that evaluates to a script. The resulting script will be
+added to the internal, global generation script verbatim and runs
+outside of any sandbox. Refer to `age.generators` for example usage.
 
 This allows you to create/overwrite adjacent files if necessary, for example
 when you also want to store the public key for a generated private key.
@@ -418,6 +402,21 @@ secret should be written to stdout and any info or errors to stderr.
 
 Note that the script is run with `set -euo pipefail` conditions as the
 normal user that runs `nix run .#generate-secrets`.
+
+## `age.generators`
+
+| Type    | `attrsOf (functionTo str)` |
+|-----|-----|
+| Default | Defines some common password generators. See source. |
+| Example | See source or [Secret generation](#secret-generation). |
+
+Allows defining reusable secret generator scripts. By default these generators are provided:
+
+- `alnum`: Generates an alphanumeric string of length 48
+- `base64`: Generates a base64 string of 32-byte random (length 44)
+- `hex`: Generates a hex string of 24-byte random (length 48)
+- `passphrase`: Generates a 6-word passphrase delimited by spaces
+- `dhparams`: Generates 4096-bit dhparams
 
 ## `age.rekey.forceRekeyOnSystem`
 
