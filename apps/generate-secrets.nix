@@ -91,7 +91,7 @@
 
   # Collects all secrets that have generators across all hosts.
   # Deduplicates secrets if the generator is the same, otherwise throws an error.
-  secretsWithGenerators =
+  secretsWithContext =
     foldl'
     (set: host:
       foldl' (addGeneratedSecretChecked host) set
@@ -99,35 +99,35 @@
     {} (attrNames nixosConfigurations);
 
   # The command that actually generates a secret.
-  secretGenerationCommand = secret: ''
-    if wants_secret ${escapeShellArg secret.sourceFile} ; then
+  secretGenerationCommand = contextSecret: ''
+    if wants_secret ${escapeShellArg contextSecret.sourceFile} ${escapeShellArg (concatStringsSep "," contextSecret.secret.generator.tags)} ; then
       # If the secret has dependencies, force regeneration if any
       # dependency was modified since its last generation
       dep_mtimes=(
         1 # Have at least one entry
-        ${concatStringsSep "\n" (flip map secret.secret.generator.dependencies (dep:
+        ${concatStringsSep "\n" (flip map contextSecret.secret.generator.dependencies (dep:
           "\"$(stat -c %Y ${escapeShellArg (relativeToFlake dep.rekeyFile)} 2>/dev/null || echo 1)\""
         ))}
       )
       mtime_newest_dep=$(IFS=$'\n'; sort -nr <<< "''${dep_mtimes[*]}" | head -n1)
-      mtime_this=$(stat -c %Y ${escapeShellArg secret.sourceFile} 2>/dev/null || echo 0)
+      mtime_this=$(stat -c %Y ${escapeShellArg contextSecret.sourceFile} 2>/dev/null || echo 0)
 
       # Regenerate if the file doesn't exist, any dependency is newer, or we should force regeneration
-      if [[ ! -e ${escapeShellArg secret.sourceFile} ]] || [[ "$mtime_newest_dep" -gt "$mtime_this" ]] || [[ "$FORCE_GENERATE" == true ]]; then
-        echo "Generating secret [34m"${escapeShellArg secret.sourceFile}"[m [90m("${concatStringsSep "', '" (map escapeShellArg secret.defs)}")[m"
+      if [[ ! -e ${escapeShellArg contextSecret.sourceFile} ]] || [[ "$mtime_newest_dep" -gt "$mtime_this" ]] || [[ "$FORCE_GENERATE" == true ]]; then
+        echo "Generating secret [34m"${escapeShellArg contextSecret.sourceFile}"[m [90m("${concatStringsSep "', '" (map escapeShellArg contextSecret.defs)}")[m"
         content=$(
-          ${secret.script}
+          ${contextSecret.script}
         ) || die "Generator exited with status $?."
 
-        ${rageMasterEncrypt} -o ${escapeShellArg secret.sourceFile} <<< "$content" \
+        ${rageMasterEncrypt} -o ${escapeShellArg contextSecret.sourceFile} <<< "$content" \
           || die "Failed to generate or encrypt secret."
 
         if [[ "$ADD_TO_GIT" == true ]]; then
-          git add ${escapeShellArg secret.sourceFile} \
+          git add ${escapeShellArg contextSecret.sourceFile} \
             || die "Failed to add generated secret to git"
         fi
       else
-        echo "[90mSkipping existing secret "${escapeShellArg secret.sourceFile}" ("${concatStringsSep "', '" (map escapeShellArg secret.defs)}")[m"
+        echo "[90mSkipping existing secret "${escapeShellArg contextSecret.sourceFile}" ("${concatStringsSep "', '" (map escapeShellArg contextSecret.defs)}")[m"
       fi
     fi
   '';
@@ -136,10 +136,10 @@
   # Any dependencies of generators are guaranteed to come first, such that
   # generators may use the result of other secrets.
   orderedGenerationCommands = let
-    stages = flip mapAttrs secretsWithGenerators (i: secret:
+    stages = flip mapAttrs secretsWithContext (i: contextSecret:
       stringsWithDeps.fullDepEntry
-      (secretGenerationCommand secretsWithGenerators.${i})
-      (map (x: relativeToFlake x.rekeyFile) secretsWithGenerators.${i}.secret.generator.dependencies));
+      (secretGenerationCommand secretsWithContext.${i})
+      (map (x: relativeToFlake x.rekeyFile) secretsWithContext.${i}.secret.generator.dependencies));
   in
     stringsWithDeps.textClosureMap (x: x) stages (attrNames stages);
 in
@@ -156,11 +156,14 @@ in
       echo '-h, --help                Show help'
       echo '-f, --force-generate      Force generating existing secrets'
       echo '-a, --add-to-git          Add generated secrets to git via git add.'
+      echo '-t, --tags  TAGS          Additionally select all secrets matching any given tag.'
+      echo '                            Takes a comma separated list of tags.'
     }
 
     FORCE_GENERATE=false
     ADD_TO_GIT=false
     POSITIONAL_ARGS=()
+    TAGS=""
     while [[ $# -gt 0 ]]; do
       case "$1" in
         "help"|"--help"|"-help"|"-h")
@@ -172,6 +175,10 @@ in
           ;;
         "--add-to-git"|"-a")
           ADD_TO_GIT=true
+          ;;
+        "--tags"|"-t")
+          shift
+          TAGS="$1"
           ;;
         "--")
           shift
@@ -185,13 +192,19 @@ in
     done
 
     # $1: secret file to test if wanted
+    # $2: comma separated list of tags that match this secret
     function wants_secret() {
-      if [[ ''${#POSITIONAL_ARGS[@]} -eq 0 ]]; then
+      if [[ ''${#POSITIONAL_ARGS[@]} -eq 0 ]] && [[ -z "$TAGS" ]]; then
         return 0
       else
         for secret in ''${POSITIONAL_ARGS[@]} ; do
           [[ "$(realpath -m "$1")" == "$(realpath -m "$secret")" ]] && return 0
         done
+        # Calculate the number of common lines in the splitted tags. Make sure to always include
+        # the empty line so TAGS="" $2="" doesn't produce false positives. If more than one line
+        # is returned, there is at least once matching tag.
+        n_matching=$(comm -12 <(tr ',' '\n' <<< ",''${TAGS}," | sort -u) <(tr ',' '\n' <<< ",$2," | sort -u) | wc -l || echo 1)
+        [[ "$n_matching" -gt 1 ]] && return 0
         return 1
       fi
     }
@@ -201,7 +214,7 @@ in
     fi
 
     KNOWN_SECRETS=(
-      ${concatStringsSep "\n" (map (x: escapeShellArg x.sourceFile) (attrValues secretsWithGenerators))}
+      ${concatStringsSep "\n" (map (x: escapeShellArg x.sourceFile) (attrValues secretsWithContext))}
     )
     for secret in ''${POSITIONAL_ARGS[@]} ; do
       for known in ''${KNOWN_SECRETS[@]} ; do

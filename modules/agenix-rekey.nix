@@ -119,6 +119,16 @@ nixpkgs: {
           then config.age.generators.${submod.config.script}
           else submod.config.script;
       };
+
+      tags = mkOption {
+        type = types.listOf types.str;
+        default = [];
+        example = ["wireguard"];
+        description = ''
+          Optional list of tags that may be used to refer to secrets that use this generator.
+          Useful to regenerate all secrets matching a specific tag using `nix run .#generate-secrets -f -t wireguard`.
+        '';
+      };
     };
   });
 in {

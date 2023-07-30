@@ -403,6 +403,16 @@ secret should be written to stdout and any info or errors to stderr.
 Note that the script is run with `set -euo pipefail` conditions as the
 normal user that runs `nix run .#generate-secrets`.
 
+## `age.secrets.<name>.generator.tags`
+
+| Type    | `listOf str` |
+|-----|-----|
+| Default | `[]` |
+| Example | `["wireguard"]` |
+
+Optional list of tags that may be used to refer to secrets that use this generator.
+Useful to regenerate all secrets matching a specific tag using `nix run .#generate-secrets -f -t wireguard`.
+
 ## `age.generators`
 
 | Type    | `attrsOf (functionTo str)` |
