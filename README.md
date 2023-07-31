@@ -428,6 +428,17 @@ Allows defining reusable secret generator scripts. By default these generators a
 - `passphrase`: Generates a 6-word passphrase delimited by spaces
 - `dhparams`: Generates 4096-bit dhparams
 
+## `age.rekey.generatedSecretsDir`
+
+| Type    | `nullOr path` |
+|-----|-----|
+| Default | `null` |
+| Example | `./secrets/generated` |
+
+The path where all generated secrets should be stored by default.
+If set, this automatically sets `age.secrets.<name>.rekeyFile` to a default
+value in this directory, for any secret that defines a generator.
+
 ## `age.rekey.forceRekeyOnSystem`
 
 | Type    | `nullOr str` |

@@ -232,7 +232,9 @@ in {
 
           rekeyFile = mkOption {
             type = types.nullOr types.path;
-            default = null;
+            default = if config.age.rekey.generatedSecretsDir != null
+                      then config.age.rekey.generatedSecretsDir + "/${submod.config.id}.age"
+                      else null;
             example = literalExpression "./secrets/password.age";
             description = ''
               The path to the encrypted .age file for this secret. The file must
@@ -296,6 +298,15 @@ in {
     };
 
     rekey = {
+      generatedSecretsDir = mkOption {
+        type = types.nullOr types.path;
+        default = null;
+        description = ''
+          The path where all generated secrets should be stored by default.
+          If set, this automatically sets `age.secrets.<name>.rekeyFile` to a default
+          value in this directory, for any secret that defines a generator.
+        '';
+      };
       forceRekeyOnSystem = mkOption {
         type = types.nullOr types.str;
         description = ''
