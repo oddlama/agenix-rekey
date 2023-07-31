@@ -427,6 +427,7 @@ Allows defining reusable secret generator scripts. By default these generators a
 - `hex`: Generates a hex string of 24-byte random (length 48)
 - `passphrase`: Generates a 6-word passphrase delimited by spaces
 - `dhparams`: Generates 4096-bit dhparams
+- `ssh-ed25519`: Generates a ssh-ed25519 private key
 
 ## `age.rekey.generatedSecretsDir`
 
