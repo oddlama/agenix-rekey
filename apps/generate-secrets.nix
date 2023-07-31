@@ -115,6 +115,7 @@
       # Regenerate if the file doesn't exist, any dependency is newer, or we should force regeneration
       if [[ ! -e ${escapeShellArg contextSecret.sourceFile} ]] || [[ "$mtime_newest_dep" -gt "$mtime_this" ]] || [[ "$FORCE_GENERATE" == true ]]; then
         echo "Generating secret [34m"${escapeShellArg contextSecret.sourceFile}"[m [90m("${concatStringsSep "', '" (map escapeShellArg contextSecret.defs)}")[m"
+        mkdir -p "$(dirname ${escapeShellArg contextSecret.sourceFile})"
         content=$(
           ${contextSecret.script}
         ) || die "Generator exited with status $?."
