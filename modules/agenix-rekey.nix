@@ -308,6 +308,15 @@ in {
           value in this directory, for any secret that defines a generator.
         '';
       };
+      derivation = mkOption {
+        type = types.package;
+        default = rekeyedSecrets.drv;
+        readOnly = true;
+        description = ''
+          The derivation that contains the rekeyed secrets.
+          Cannot be built directly, use `nix run .#rekey` instead.
+        '';
+      };
       forceRekeyOnSystem = mkOption {
         type = types.nullOr types.str;
         description = ''
@@ -344,6 +353,9 @@ in {
         description = ''
           The age public key to use as a recipient when rekeying. This either has to be the
           path to an age public key file, or the public key itself in string form.
+          HINT: If you want to use a path, make sure to use an actual nix path, so for example
+          `./host.pub`, otherwise it will be interpreted as the content and cause errors.
+          Alternatively you can use `readFile "/path/to/host.pub"` yourself.
 
           If you are managing a single host only, you can use `"/etc/ssh/ssh_host_ed25519_key.pub"`
           here to allow the rekey app to directly read your pubkey from your system.
@@ -357,7 +369,8 @@ in {
         default = dummyPubkey;
         #example = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI.....";
         #example = "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3290gq";
-        example = "/etc/ssh/ssh_host_ed25519_key.pub";
+        example = literalExpression "./secrets/host1.pub";
+        #example = "/etc/ssh/ssh_host_ed25519_key.pub";
       };
       masterIdentities = mkOption {
         type = with types; listOf (coercedTo path toString str);
