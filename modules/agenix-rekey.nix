@@ -14,6 +14,7 @@ nixpkgs: {
     flatten
     flip
     hasAttr
+    hasPrefix
     hasSuffix
     isPath
     isString
@@ -157,7 +158,7 @@ in {
         ]));
 
     warnings = let
-      hasGoodSuffix = x: (hasSuffix ".age" x || hasSuffix ".pub" x);
+      hasGoodSuffix = x: (hasPrefix builtins.storeDir x) -> (hasSuffix ".age" x || hasSuffix ".pub" x);
     in
       # optional (!rekeyedSecrets.isBuilt) ''The secrets for host ${config.networking.hostName} have not yet been rekeyed! Be sure to run `nix run .#rekey` after changing your secrets!''
       optional (!all hasGoodSuffix config.age.rekey.masterIdentities) ''
