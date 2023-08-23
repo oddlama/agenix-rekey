@@ -49,6 +49,7 @@ Use `nix run .#<appname> -- --help` for specific usage information.
 {
   inputs.agenix.url = "github:ryantm/agenix";
   inputs.agenix-rekey.url = "github:oddlama/agenix-rekey";
+  inputs.agenix-rekey.inputs.nixpkgs.follows = "nixpkgs"; # This is necessary to avoid derivation mismatches!
   # also works with inputs.ragenix.url = ...;
   # ...
 
@@ -66,7 +67,10 @@ Use `nix run .#<appname> -- --help` for specific usage information.
     # Some initialized nixpkgs set
     pkgs = import nixpkgs { system = "x86_64-linux"; };
     # Adds the necessary apps so you can rekey your secrets with `nix run .#rekey`
-    apps."x86_64-linux" = agenix-rekey.defineApps self pkgs self.nixosConfigurations;
+    # Make sure that the pkgs passed here comes from the same nixpkgs version as
+    # the pkgs used on your hosts in `nixosConfigurations`, otherwise the rekeyed
+    # derivations will not be found!
+    apps.x86_64-linux = agenix-rekey.defineApps self pkgs self.nixosConfigurations;
   };
 }
 ```
