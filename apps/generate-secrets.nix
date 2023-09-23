@@ -1,5 +1,4 @@
 {
-  self,
   lib,
   pkgs,
   nixosConfigurations,
@@ -114,7 +113,7 @@
 
       # Regenerate if the file doesn't exist, any dependency is newer, or we should force regeneration
       if [[ ! -e ${escapeShellArg contextSecret.sourceFile} ]] || [[ "$mtime_newest_dep" -gt "$mtime_this" ]] || [[ "$FORCE_GENERATE" == true ]]; then
-        echo "Generating secret [34m"${escapeShellArg contextSecret.sourceFile}"[m [90m("${concatStringsSep "', '" (map escapeShellArg contextSecret.defs)}")[m"
+        echo "[1;32m  Generating[m [34m"${escapeShellArg contextSecret.sourceFile}"[m [90m("${concatStringsSep "', '" (map escapeShellArg contextSecret.defs)}")[m"
         mkdir -p "$(dirname ${escapeShellArg contextSecret.sourceFile})"
         content=$(
           ${contextSecret.script}
@@ -128,7 +127,7 @@
             || die "Failed to add generated secret to git"
         fi
       else
-        echo "[90mSkipping existing secret "${escapeShellArg contextSecret.sourceFile}" ("${concatStringsSep "', '" (map escapeShellArg contextSecret.defs)}")[m"
+        echo "[1;90m    Skipping[m [90m[already exists] "${escapeShellArg contextSecret.sourceFile}" ("${concatStringsSep "', '" (map escapeShellArg contextSecret.defs)}")[m"
       fi
     fi
   '';

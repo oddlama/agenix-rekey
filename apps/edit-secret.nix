@@ -1,5 +1,4 @@
 {
-  self,
   lib,
   pkgs,
   nixosConfigurations,
@@ -11,6 +10,7 @@
     escapeShellArg
     filter
     hasPrefix
+    optionalString
     removePrefix
     warn
     ;
@@ -81,6 +81,10 @@ in
     # If file is not given, show fzf
     case "''${#POSITIONAL_ARGS[@]}" in
       0)
+        ${optionalString (builtins.length validRelativeSecretPaths == 0) ''
+        die "No relevant secret definitions were found for any host. Pass a filename to create a new secret regardless of whether it is already used."
+        break
+        ''}
         FILE=$(echo ${escapeShellArg (concatStringsSep "\n" validRelativeSecretPaths)} \
           | ${pkgs.fzf}/bin/fzf --tiebreak=end --bind=tab:down,btab:up,change:top --height='~50%' --tac --cycle --layout=reverse) \
           || die "No file selected. Aborting."
@@ -93,8 +97,19 @@ in
     esac
     [[ "$FILE" != *".age" ]] && echo "[1;33mwarning:[m secrets should use the .age suffix by convention"
 
-    CLEARTEXT_FILE=$(${pkgs.mktemp}/bin/mktemp)
-    ENCRYPTED_FILE=$(${pkgs.mktemp}/bin/mktemp)
+    # Extract suffix before .age, if there is any.
+    SUFFIX=$(basename "$FILE")
+    SUFFIX=''${SUFFIX%.age}
+    if [[ "''${SUFFIX}" == *.* ]]; then
+      # Extract the second suffix if there is one
+      SUFFIX=''${SUFFIX##*.}
+    else
+      # Use txt otherwise
+      SUFFIX="txt"
+    fi
+
+    CLEARTEXT_FILE=$(mktemp --suffix=".$SUFFIX")
+    ENCRYPTED_FILE=$(mktemp --suffix=".$SUFFIX")
 
     function cleanup() {
       [[ -e "$CLEARTEXT_FILE" ]] && rm "$CLEARTEXT_FILE"
@@ -118,8 +133,10 @@ in
       # Editor options to prevent leaking information
       EDITOR_OPTS=()
       case "$EDITOR" in
-        vim|"vim "*|nvim|"nvim "*)
-          EDITOR_OPTS=("--cmd" 'au BufRead * setlocal history=0 nobackup nomodeline noshelltemp noswapfile noundofile nowritebackup secure viminfo=""') ;;
+        *nvim*)
+          EDITOR_OPTS=("--cmd" 'au BufRead * setlocal nobackup nomodeline noshelltemp noswapfile noundofile nowritebackup shadafile=NONE') ;;
+        *vim*)
+          EDITOR_OPTS=("--cmd" 'au BufRead * setlocal nobackup nomodeline noshelltemp noswapfile noundofile nowritebackup viminfo=""') ;;
         *) ;;
       esac
       $EDITOR "''${EDITOR_OPTS[@]}" "$CLEARTEXT_FILE" \

@@ -1,5 +1,5 @@
 {
-  self,
+  userFlake,
   lib,
   pkgs,
   nixosConfigurations,
@@ -38,7 +38,7 @@
   # Extra recipients for master encrypted secrets
   extraEncryptionPubkeys = concatStringsSep " " (map pubkeyOpt mergedExtraEncryptionPubkeys);
 in {
-  userFlakeDir = toString self.outPath;
+  userFlakeDir = toString userFlake.outPath;
   inherit mergedSecrets;
 
   # Premade shell commands to encrypt and decrypt secrets

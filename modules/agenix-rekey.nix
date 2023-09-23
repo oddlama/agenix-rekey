@@ -160,7 +160,6 @@ in {
     warnings = let
       hasGoodSuffix = x: (hasPrefix builtins.storeDir x) -> (hasSuffix ".age" x || hasSuffix ".pub" x);
     in
-      # optional (!rekeyedSecrets.isBuilt) ''The secrets for host ${config.networking.hostName} have not yet been rekeyed! Be sure to run `nix run .#rekey` after changing your secrets!''
       optional (!all hasGoodSuffix config.age.rekey.masterIdentities) ''
         At least one of your rekey.masterIdentities references an unencrypted age identity in your nix store!
         ${concatMapStrings (x: "  - ${x}\n") (filter hasGoodSuffix config.age.rekey.masterIdentities)}
@@ -260,7 +259,7 @@ in {
         };
         config = {
           # Produce a rekeyed age secret
-          file = mkIf (submod.config.rekeyFile != null) "${rekeyedSecrets.drv}/${submod.config.id}.age";
+          file = mkIf (submod.config.rekeyFile != null) "${rekeyedSecrets}/${submod.config.id}.age";
         };
       }));
     };
@@ -311,7 +310,7 @@ in {
       };
       derivation = mkOption {
         type = types.package;
-        default = rekeyedSecrets.drv;
+        default = rekeyedSecrets;
         readOnly = true;
         description = ''
           The derivation that contains the rekeyed secrets.
@@ -343,6 +342,27 @@ in {
         '';
         default = null;
         example = "x86_64-linux";
+      };
+      cacheDir = mkOption {
+        type = types.str;
+        default = "/tmp/agenix-rekey.\"$UID\"";
+        example = "\"\${XDG_CACHE_HOME:=$HOME/.cache}/agenix-rekey\"";
+        description = ''
+          This is the directory where we store the rekeyed secrets
+          so that they can be found later by the derivation builder.
+
+          Must be a bash expression that expands to the directory to use
+          as a cache. By default the cache is kept in /tmp, but you can
+          change it to (see example) to persist the cache across reboots.
+          Make sure to use corret quoting, this _must_ be a bash expression
+          resulting in a single string.
+
+          The actual secrets will be stored in the directory based on their input
+          content hash (derived from host pubkey and file content hash), and stored
+          as `''${cacheDir}/secrets/<ident-sha256>-<filename>`. This allows us to
+          reuse already existing rekeyed secrets when rekeying again, while providing
+          a deterministic path for each secret.
+        '';
       };
       hostPubkey = mkOption {
         type = with types;

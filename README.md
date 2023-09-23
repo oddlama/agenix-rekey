@@ -70,7 +70,11 @@ Use `nix run .#<appname> -- --help` for specific usage information.
     # Make sure that the pkgs passed here comes from the same nixpkgs version as
     # the pkgs used on your hosts in `nixosConfigurations`, otherwise the rekeyed
     # derivations will not be found!
-    apps.x86_64-linux = agenix-rekey.defineApps self pkgs self.nixosConfigurations;
+    apps.x86_64-linux = agenix-rekey.defineApps {
+      userFlake = self;
+      inherit pkgs;
+      inherit (self) nixosConfigurations;
+    };
   };
 }
 ```
@@ -85,11 +89,15 @@ Defining the `rekey` apps for multiple systems
   inputs.flake-utils.url = "github:numtide/flake-utils";
   # ... same as above
 
-  outputs = { self, nixpkgs, agenix, agenix-rekey, flake-utils }@inputs: {
+  outputs = { self, nixpkgs, agenix, agenix-rekey, flake-utils, ... }@inputs: {
     # ... same as above
   } // flake-utils.lib.eachDefaultSystem (system: {
     pkgs = import nixpkgs { inherit system; };
-    apps = agenix-rekey.defineApps self pkgs self.nixosConfigurations;
+    apps = agenix-rekey.defineApps {
+      userFlake = self;
+      inherit pkgs;
+      inherit (self) nixosConfigurations;
+    };
   });
 }
 ```
@@ -110,7 +118,7 @@ need to be adjusted like below.
   inputs.flake-utils.url = "github:numtide/flake-utils";
   # ... same as above
 
-  outputs = { self, nixpkgs, agenix, agenix-rekey }@inputs: {
+  outputs = { self, nixpkgs, agenix, agenix-rekey, colmena, ... }@inputs: {
     colmena = {
       # ... your meta and hosts as described by the colmena manual
       exampleHost = {
@@ -124,7 +132,11 @@ need to be adjusted like below.
     };
   } // flake-utils.lib.eachDefaultSystem (system: {
     pkgs = import nixpkgs { inherit system; };
-    apps = agenix-rekey.defineApps self pkgs nodes ((colmena.lib.makeHive self.colmena).introspect (x: x)).nodes;
+    apps = agenix-rekey.defineApps {
+      userFlake = self;
+      inherit pkgs;
+      nixosConfigurations = ((colmena.lib.makeHive self.colmena).introspect (x: x)).nodes;
+    };
   });
 }
 ```
@@ -443,6 +455,28 @@ Allows defining reusable secret generator scripts. By default these generators a
 The path where all generated secrets should be stored by default.
 If set, this automatically sets `age.secrets.<name>.rekeyFile` to a default
 value in this directory, for any secret that defines a generator.
+
+## `age.rekey.cacheDir`
+
+| Type    | `str` |
+|-----|-----|
+| Default | `"/tmp/agenix-rekey.\"$UID\""` |
+| Example | `"\"\${XDG_CACHE_HOME:=$HOME/.cache}/agenix-rekey\""` |
+
+This is the directory where we store the rekeyed secrets
+so that they can be found later by the derivation builder.
+
+Must be a bash expression that expands to the directory to use
+as a cache. By default the cache is kept in /tmp, but you can
+change it to (see example) to persist the cache across reboots.
+Make sure to use corret quoting, this _must_ be a bash expression
+resulting in a single string.
+
+The actual secrets will be stored in the directory based on their input
+content hash (derived from host pubkey and file content hash), and stored
+as `${cacheDir}/secrets/<ident-sha256>-<filename>`. This allows us to
+reuse already existing rekeyed secrets when rekeying again, while providing
+a deterministic path for each secret.
 
 ## `age.rekey.forceRekeyOnSystem`
 
