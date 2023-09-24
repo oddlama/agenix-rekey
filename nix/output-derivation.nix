@@ -52,6 +52,7 @@ in
     # to the host via the predictable output path for this derivation
     installPhase =
       ''
+        set -euo pipefail
         mkdir -p "$out"
 
         function ensure_exists() {
@@ -65,7 +66,10 @@ in
       + flip concatMapStrings (attrValues secretsToRekey) (secret: ''
         ensure_exists ${cachePathFor secret}
         cp -v ${cachePathFor secret} "$out/"${escapeShellArg "${secret.name}.age"}
-      '');
+      '')
+      + ''
+        touch $out/success
+      '';
 
     passthru = {
       inherit cachePathFor;

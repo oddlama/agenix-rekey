@@ -64,10 +64,12 @@
       fi
     '';
   in ''
+    will_delete=false
     # Remove any existing rekeyed secrets from the nix store if --force was given
-    if [[ "$FORCE" == true ]] && [[ -e ${outPath} ]]; then
+    if [[ -e ${outPath} && ( "$FORCE" == true || ! -e ${outPath}/success ) ]]; then
       echo "[1;31m     Marking[m [31mexisting store path of [33m"${escapeShellArg hostName}"[31m for deletion [90m("${outPath}")[m"
       STORE_PATHS_TO_DELETE+=(${outPath})
+      will_delete=true
     fi
 
     any_rekeyed=false
@@ -76,7 +78,7 @@
 
     # We need to save the rekeyed output when any secret was rekeyed, or when the
     # output derivation doesn't exist (it could have been removed manually).
-    if [[ "$any_rekeyed" == true ]] || [[ ! -e ${outPath} ]]; then
+    if [[ "$any_rekeyed" == true || ! -e ${outPath} || "$will_delete" == true ]]; then
       SANDBOX_PATHS[${rekeyedSecrets.cacheDir}]=1
       [[ ${rekeyedSecrets.cacheDir} =~ [[:space:]] ]] \
         && die "The path to the rekeyed secret cannot contain spaces (i.e. neither cacheDir nor name) due to a limitation of nix --extra-sandbox-paths."
@@ -212,7 +214,7 @@ in
 
     if [[ "''${#STORE_PATHS_TO_DELETE[@]}" -gt 0 ]]; then
       echo "[1;31m    Deleting[m [31m''${#STORE_PATHS_TO_DELETE[@]} marked store paths[m"
-      nix store delete "''${STORE_PATHS_TO_DELETE[@]}"
+      nix store delete "''${STORE_PATHS_TO_DELETE[@]}" 2>/dev/null
     fi
 
     if [[ "''${#DRVS_TO_BUILD[@]}" -gt 0 ]]; then
