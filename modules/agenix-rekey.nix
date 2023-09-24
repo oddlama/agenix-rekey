@@ -320,15 +320,16 @@ in {
       cacheDir = mkOption {
         type = types.str;
         default = "/tmp/agenix-rekey.\"$UID\"";
-        example = "\"\${XDG_CACHE_HOME:=$HOME/.cache}/agenix-rekey\"";
+        example = "/var/tmp/agenix-rekey.\"$UID\"";
         description = ''
           This is the directory where we store the rekeyed secrets
           so that they can be found later by the derivation builder.
 
           Must be a bash expression that expands to the directory to use
           as a cache. By default the cache is kept in /tmp, but you can
-          change it to (see example) to persist the cache across reboots.
-          Make sure to use corret quoting, this _must_ be a bash expression
+          change it (see example) to persist the cache across reboots.
+          The directory must be readable by the nix build users. Make
+          sure to use corret quoting, this _must_ be a bash expression
           resulting in a single string.
 
           The actual secrets will be stored in the directory based on their input
