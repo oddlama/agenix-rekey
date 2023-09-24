@@ -24,11 +24,19 @@
     pre-commit-hooks,
     ...
   }: let
-    allApps = ["edit" "regenerate" "rekey"];
+    allApps = ["edit" "generate" "rekey"];
   in
     {
       nixosModules.agenixRekey = import ./modules/agenix-rekey.nix nixpkgs;
       nixosModules.default = self.nixosModules.agenixRekey;
+
+      # A nixpkgs overlay that adds the agenix CLI wrapper
+      overlays.default = self.overlays.agenix-rekey;
+      overlays.agenix-rekey = _final: prev: {
+        agenix-rekey = prev.callPackage ./nix/package.nix {
+          inherit allApps;
+        };
+      };
 
       configure = {
         # The path of the user's flake. Needed to run a sandbox-relaxed
@@ -36,13 +44,14 @@
         userFlake,
         # All nixos definitions that should be considered for rekeying
         nodes,
+        # The package sets to use. pkgs.${system} must yield an initialized nixpkgs package set
+        pkgs ? self.pkgs,
       }:
-        flake-utils.lib.eachDefaultSystem (system: let
-          pkgs = self.pkgs.${system};
-        in {
-          apps = pkgs.lib.genAttrs allApps (app:
+        flake-utils.lib.eachDefaultSystem (system: {
+          apps = pkgs.${system}.lib.genAttrs allApps (app:
             import ./apps/${app}.nix {
-              inherit nodes pkgs userFlake;
+              inherit nodes userFlake;
+              pkgs = pkgs.${system};
             });
         });
 
@@ -51,15 +60,24 @@
       # the same interface as before.
       defineApps = argsOrSelf: pkgs: nodes:
         pkgs.lib.warn ''
-          The `agenix-rekey.defineApps self pkgs nodes` function is deprecated and will be removed in 2024.
-          The new approach will unclutter your flake's app definitions and provide a hermetic entrypoint for
-          agenix-rekey, which can be accessed more egonomically via a new CLI wrapper 'agenix' - or alternatively
-          via `nix run .#agenix-rekey.apps.$system.<app>` in case you want to integrate it into your own scripts.
+          The `agenix-rekey.defineApps self pkgs nodes` function is deprecated and will
+          be removed in 2024. The new approach will unclutter your flake's app definitions
+          and provide a hermetic entrypoint for agenix-rekey, which can be accessed more
+          egonomically via a new CLI wrapper 'agenix'. Alternatively via you can still run
+          the scripts directly from your flake using `nix run .#agenix-rekey.apps.$system.<app>`,
+          in case you don't want to use the wrapper.
 
-          Please remove your current agenix-rekey.defineApps call entirely and instead add a new top-level
-          output `agenix-rekey = { userFlake = self; nodes = self.nixosSystems };`. The new wrapper CLI can
-          be accessed by adding `agenix-rekey.packages.default` to your devshell. For more information,
-          please visit the github page and refer to the updated README.''
+          Please remove your current `agenix-rekey.defineApps` call entirely from your apps
+          and instead add a new top-level output like this:
+
+            agenix-rekey = agenix-rekey.configure {
+              userFlake = self;
+              nodes = self.nixosSystems;
+            };
+
+          The new wrapper CLI can be accessed via `nix shell github:oddlama/agenix-rekey` or by
+          adding `agenix-rekey.packages.''${system}.default` to your devshell. For more information,
+          please visit the github page and refer to the updated instructions in the README.''
         (import ./apps) {
           userFlake = argsOrSelf; # argsOrSelf = self
           inherit pkgs nodes;
@@ -68,15 +86,16 @@
     // flake-utils.lib.eachDefaultSystem (system: rec {
       pkgs = import nixpkgs {
         inherit system;
-        overlays = [devshell.overlays.default];
+        overlays = [
+          devshell.overlays.default
+          self.overlays.default
+        ];
       };
 
       # `nix build`
       packages.default = packages.agenix-rekey;
       # `nix build .#agenix-rekey`
-      packages.agenix-rekey = pkgs.callPackage ./nix/package.nix {
-        inherit allApps;
-      };
+      packages.agenix-rekey = pkgs.agenix-rekey;
 
       # `nix run`
       apps.default = flake-utils.lib.mkApp {drv = packages.agenix-rekey;};

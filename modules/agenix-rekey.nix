@@ -52,7 +52,7 @@ nixpkgs: {
         default = [];
         description = ''
           Other secrets on which this secret depends. This guarantees that in the final
-          `nix run .#generate-secrets` script, all dependencies will be generated before
+          `agenix generate` script, all dependencies will be generated before
           this secret is generated, allowing you use their outputs via the passed `decrypt` function.
 
           The given dependencies will be passed to the defined `script` via the `deps` parameter,
@@ -105,7 +105,7 @@ nixpkgs: {
           secret should be written to stdout and any info or errors to stderr.
 
           Note that the script is run with `set -euo pipefail` conditions as the
-          normal user that runs `nix run .#generate-secrets`.
+          normal user that runs `agenix generate`.
         '';
       };
 
@@ -126,7 +126,7 @@ nixpkgs: {
         example = ["wireguard"];
         description = ''
           Optional list of tags that may be used to refer to secrets that use this generator.
-          Useful to regenerate all secrets matching a specific tag using `nix run .#generate-secrets -f -t wireguard`.
+          Useful to regenerate all secrets matching a specific tag using `agenix generate -f -t wireguard`.
         '';
       };
     };
@@ -299,6 +299,15 @@ in {
     };
 
     rekey = {
+      derivation = mkOption {
+        type = types.package;
+        default = rekeyedSecrets;
+        readOnly = true;
+        description = ''
+          The derivation that contains the rekeyed secrets.
+          Cannot be built directly, use `agenix rekey` instead.
+        '';
+      };
       generatedSecretsDir = mkOption {
         type = types.nullOr types.path;
         default = null;
@@ -308,13 +317,25 @@ in {
           value in this directory, for any secret that defines a generator.
         '';
       };
-      derivation = mkOption {
-        type = types.package;
-        default = rekeyedSecrets;
-        readOnly = true;
+      cacheDir = mkOption {
+        type = types.str;
+        default = "/tmp/agenix-rekey.\"$UID\"";
+        example = "\"\${XDG_CACHE_HOME:=$HOME/.cache}/agenix-rekey\"";
         description = ''
-          The derivation that contains the rekeyed secrets.
-          Cannot be built directly, use `nix run .#rekey` instead.
+          This is the directory where we store the rekeyed secrets
+          so that they can be found later by the derivation builder.
+
+          Must be a bash expression that expands to the directory to use
+          as a cache. By default the cache is kept in /tmp, but you can
+          change it to (see example) to persist the cache across reboots.
+          Make sure to use corret quoting, this _must_ be a bash expression
+          resulting in a single string.
+
+          The actual secrets will be stored in the directory based on their input
+          content hash (derived from host pubkey and file content hash), and stored
+          as `''${cacheDir}/secrets/<ident-sha256>-<filename>`. This allows us to
+          reuse already existing rekeyed secrets when rekeying again, while providing
+          a deterministic path for each secret.
         '';
       };
       forceRekeyOnSystem = mkOption {
@@ -342,27 +363,6 @@ in {
         '';
         default = null;
         example = "x86_64-linux";
-      };
-      cacheDir = mkOption {
-        type = types.str;
-        default = "/tmp/agenix-rekey.\"$UID\"";
-        example = "\"\${XDG_CACHE_HOME:=$HOME/.cache}/agenix-rekey\"";
-        description = ''
-          This is the directory where we store the rekeyed secrets
-          so that they can be found later by the derivation builder.
-
-          Must be a bash expression that expands to the directory to use
-          as a cache. By default the cache is kept in /tmp, but you can
-          change it to (see example) to persist the cache across reboots.
-          Make sure to use corret quoting, this _must_ be a bash expression
-          resulting in a single string.
-
-          The actual secrets will be stored in the directory based on their input
-          content hash (derived from host pubkey and file content hash), and stored
-          as `''${cacheDir}/secrets/<ident-sha256>-<filename>`. This allows us to
-          reuse already existing rekeyed secrets when rekeying again, while providing
-          a deterministic path for each secret.
-        '';
       };
       hostPubkey = mkOption {
         type = with types;
@@ -419,7 +419,7 @@ in {
       extraEncryptionPubkeys = mkOption {
         type = with types; listOf (coercedTo path toString str);
         description = ''
-          When using `nix run .#edit-secret FILE`, the file will be encrypted for all identities in
+          When using `agenix edit FILE`, the file will be encrypted for all identities in
           rekey.masterIdentities by default. Here you can specify an extra set of pubkeys for which
           all secrets should also be encrypted. This is useful in case you want to have a backup indentity
           that must be able to decrypt all secrets but should not be used when attempting regular decryption.

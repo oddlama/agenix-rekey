@@ -1,24 +1,24 @@
-[Installation](#installation) \| [Usage](#usage) \| [How does it work?](#how-does-it-work) \| [Module options](#module-options)
+[Installation](#installation) \| [Usage](#usage) \| [How does it work?](#how-does-it-work) \| [Module options](#%EF%B8%8F-module-options)
 
-# agenix-rekey
+# 🔐 agenix-rekey
 
 This is an extension for [agenix](https://github.com/ryantm/agenix) which allows you to get rid
-of maintaining a `secrets.nix` file by re-encrypting secrets where needed.
-It also allows you to define versatile generators for secrets,
-so they can be bootstrapped automatically. This extension is a flakes-only project
-and can be used alongside regular use of agenix.
+of maintaining a `secrets.nix` file by automatically re-encrypting secrets where needed.
+It also allows you to define versatile generators for secrets, so they can be bootstrapped
+automatically. This extension is a flakes-only project and can be used alongside regular use of agenix.
 
 To make use of rekeying, you will have to store secrets in your repository by encrypting
 them with a master key (YubiKey or regular age identity), and agenix-rekey will automatically
-re-encrypt these secrets for any host that requires them. In summary:
+re-encrypt these secrets for any host that requires them. A YubiKey is highly recommended
+and will provide you with a smooth rekeying experience. In summary, you get:
 
 - 🔑 **Single master-key.** Anything in your repository is encrypted by your master YubiKey or age identity.
 - ➡️ **Host-key inference.** No need to manually keep track of which key is needed for which host - no `secrets.nix`.
 - ✔️ **Less secret management.** Rekeyed secrets never have to be added to your flake repository, thus
   you only have to keep track of the actual secret. Also a leaked host-key doesn't allow an attacker to decrypt
   older checked-in secrets, in case your repo is public.
-- 🦥 **Lazy rekeying.** Rekeying only occurs when necessary, since the results are cached in a local derivation.
-  If a new secret is added or a host key is changed, you will automatically be prompted to rekey.
+- 🦥 **Lazy rekeying.** Rekeying only occurs when necessary, since the results are encrypted and can thus be cached in a local directory.
+  If secret is added/changed or a host key is modified, you will automatically be prompted to rekey.
 - 🚀 **Simplified host bootstrapping.** Automatic rekeying can use a dummy pubkey for unknown target hosts,
   so you can bootstrap a new system for which the pubkey isn't yet known. Runtime decryption will of
   course fail, but then the ssh host key will be generated.
@@ -32,24 +32,42 @@ To function properly, agenix-rekey has to do some nix gymnastics. You can read m
   have this benefit, and the password will alwas be required for each rekeying operation.
   There's no way around that without caching the key, which I didn't want to do.
 
+## Overview
+
+When using agenix-reke, you will have an `agenix` command to run secret-related actions on your flake.
+This is a replacement for the command provided by agenix, which you won't need anymore.
+There are several apps/subcommands which you can use to manage your secrets:
+
+- `agenix generate`: Generates any secrets that don't exist yet and have a generator set.
+- `agenix edit`: Create/edit secrets using `$EDITOR`. Can encrypt existing files.
+- `agenix rekey`: Rekeys secrets for hosts that require them.
+- Use `agenix <command> --help` for specific usage information.
+
+The general workflow is quite simple, because you will automatically be prompted to
+run `agenix rekey` whenever it is necessary (the build will fail and tell you).
+
 ## Installation
 
-First, add agenix-rekey to your `flake.nix`, add the module to your hosts
-and let agenix-rekey define the necessary apps on your flake.
+To use agenix-rekey, you will have to add agenix-rekey to your `flake.nix`,
+import the provided NixOS module in your hosts and expose some information
+in your flake so agenix-rekey knows where to look for secrets.
 
-The exposed apps can be called with `nix run .#<appname>`.
+To get the `agenix` command, you can either use `nix shell github:oddlama/agenix-rekey`
+to enter a shell where it is available temporarily, or alternatively add
+the provided package `agenix-rekey.packages.${system}.default` to your devshell (see below).
 
-- `generate-secrets`: Generates any secrets that don't exist yet and have a generator set.
-- `edit-secret`: Create/edit secrets using `$EDITOR`. Can encrypt existing files.
-- `rekey`: Rekeys secrets for hosts that require them.
-
-Use `nix run .#<appname> -- --help` for specific usage information.
+You can also directly call the scripts through your flake with `nix run .#agenix-rekey.apps.<system>.<app>`
+if you don't want to use the wrapper, which may be useful for use in your own scripts.
 
 ```nix
 {
+  inputs.flake-utils.url = "github:numtide/flake-utils";
   inputs.agenix.url = "github:ryantm/agenix";
   inputs.agenix-rekey.url = "github:oddlama/agenix-rekey";
-  inputs.agenix-rekey.inputs.nixpkgs.follows = "nixpkgs"; # This is necessary to avoid derivation mismatches!
+  # Make sure to override the nixpkgs version to follow your flake,
+  # otherwise derivation paths can mismatch, resulting in the rekeyed
+  # secrets not being found!
+  inputs.agenix-rekey.inputs.nixpkgs.follows = "nixpkgs";
   # also works with inputs.ragenix.url = ...;
   # ...
 
@@ -64,94 +82,44 @@ Use `nix run .#<appname> -- --help` for specific usage information.
       ];
     };
 
-    # Some initialized nixpkgs set
-    pkgs = import nixpkgs { system = "x86_64-linux"; };
-    # Adds the necessary apps so you can rekey your secrets with `nix run .#rekey`
+    # Expose the necessary information in your flake so agenix-rekey
+    # knows where it has too look for secrets and paths.
+    #
     # Make sure that the pkgs passed here comes from the same nixpkgs version as
     # the pkgs used on your hosts in `nixosConfigurations`, otherwise the rekeyed
     # derivations will not be found!
-    apps.x86_64-linux = agenix-rekey.defineApps {
+    agenix-rekey = agenix-rekey.configure {
       userFlake = self;
-      inherit pkgs;
-      inherit (self) nixosConfigurations;
+      nodes = self.nixosConfigurations;
+      # Example for colmena:
+      # inherit ((colmena.lib.makeHive self.colmena).introspect (x: x)) nodes;
     };
-  };
-}
-```
-
-<details>
-<summary>
-Defining the `rekey` apps for multiple systems
-</summary>
-
-```nix
-{
-  inputs.flake-utils.url = "github:numtide/flake-utils";
-  # ... same as above
-
-  outputs = { self, nixpkgs, agenix, agenix-rekey, flake-utils, ... }@inputs: {
-    # ... same as above
-  } // flake-utils.lib.eachDefaultSystem (system: {
-    pkgs = import nixpkgs { inherit system; };
-    apps = agenix-rekey.defineApps {
-      userFlake = self;
-      inherit pkgs;
-      inherit (self) nixosConfigurations;
+  }
+  # OPTIONAL: This part is only needed if you want to have the agenix
+  # command in your devshell.
+  // flake-utils.lib.eachDefaultSystem (system: rec {
+    pkgs = import nixpkgs {
+      inherit system;
+      overlays = [ agenix-rekey.overlays.default ];
     };
-  });
-}
-```
-
-</details>
-
-<details>
-<summary>
-Using colmena instead of `nixosConfigurations`
-</summary>
-
-Technically you don't have to change anything to use colmena, but
-if you chose to omit `nixosConfigurations` your `apps` definition might
-need to be adjusted like below.
-
-```nix
-{
-  inputs.flake-utils.url = "github:numtide/flake-utils";
-  # ... same as above
-
-  outputs = { self, nixpkgs, agenix, agenix-rekey, colmena, ... }@inputs: {
-    colmena = {
-      # ... your meta and hosts as described by the colmena manual
-      exampleHost = {
-        imports = [
-          ./configuration.nix
-          agenix.nixosModules.default
-          agenix-rekey.nixosModules.default
-        ];
-      };
+    devShells.default = pkgs.mkShell {
+      packages = [ pkgs.agenix-rekey ];
       # ...
     };
-  } // flake-utils.lib.eachDefaultSystem (system: {
-    pkgs = import nixpkgs { inherit system; };
-    apps = agenix-rekey.defineApps {
-      userFlake = self;
-      inherit pkgs;
-      nixosConfigurations = ((colmena.lib.makeHive self.colmena).introspect (x: x)).nodes;
-    };
   });
 }
 ```
-
-</details>
 
 ## Usage
 
-Since agenix-rekey is just an extension, everything you know about agenix still applies as usual.
+Since agenix-rekey is just an extension to agenix, everything you know about agenix still applies as usual.
 Apart from specifying meta information about your master key, the only thing that you have to change
-to use rekeying is to specify `rekeyFile` instead of `file`. The full setup process is the following:
+to use rekeying is to specify `rekeyFile` instead of `file` on your secrets. The full setup process is the following:
 
-1. For each host you have to provide a pubkey for rekeying and select the master identity
-   to use for decrypting. Apart for `hostPubkey`, this is probably the same for each host.
-   If other attributes do differ between hosts, they will usually be merged when invoking the apps.
+1. For each host, you have to provide a pubkey for rekeying and select the master identity
+   to use for decrypting the secrets stored in your repository. The `hostPubkey` will obviously be different for each host,
+   but all other options (like your master identity) will usually be the same across hosts.
+   You can find more options in the api reference below.
 
     ```nix
     {
@@ -166,31 +134,37 @@ to use rekeying is to specify `rekeyFile` instead of `file`. The full setup proc
     }
     ```
 
-2. Encrypt some secrets using (r)age and your master key. `agenix-rekey` defines the `edit-secret` app in your flake,
-   which allows you to easily create/edit secrets using your favorite `$EDITOR`, and automatically uses the correct identities for de- and encryption.
+2. Encrypt some secrets using (r)age and your master key. `agenix-rekey` comes with a CLI utility called `agenix`,
+   which allows you to easily create/edit secrets using your favorite `$EDITOR`,
+   and automatically uses the correct identities for de- and encryption according to the settings from Step 1.
+
+   Ideally you should have added it to your devshell as described in the installation section,
+   otherwise you can run the utility ad-hoc with `nix run github:oddlama/agenix-rekey -- <SUBCOMMAND> [OPTIONS]`.
 
     ```bash
     # Create new or edit existing secret
-    nix run .#edit-secret secret1.age
+    agenix edit secret1.age
     # Or encrypt an existing file
-    nix run .#edit-secret -i plain.txt secret1.age
+    agenix edit -i plain.txt secret1.age
     # If no parameter is given, this will present an interactive list with all defined secrets
-    nix run .#edit-secret
+    # so you can choose which once you want to create/edit
+    agenix edit
 
     # Alternatively you can of course manually encrypt something using (r)age
     echo "secret" | rage -e -i ./your-yubikey-identity.pub > secret1.age
     ```
 
    Be careful when choosing your `$EDITOR` here, it might leak secret information when editing the file
-   by means of undo-history, or caching in general. For `vim` and `nvim` this app automatically disables related options.
+   by means of undo-history, or caching in general. For `vim` and `nvim` this app automatically disables related
+   options to make it safe to use.
 
-3. Define and use the secret in your config
+3. Define a secret in your config and use it. This works similar to classical agenix, but instead of `file` you now
+   specify `rekeyFile` (which then generates a definition for `file`).
 
     ```nix
     {
-      # Note that the option is called `rekeyFile` and not `file` if you want to use rekeying!
       age.secrets.secret1.rekeyFile = ./secret1.age;
-      users.users.user1.passwordFile = config.age.secrets.secret1.path;
+      services.someService.passwordFile = config.age.secrets.secret1.path;
     }
     ```
 
@@ -201,8 +175,10 @@ to use rekeying is to specify `rekeyFile` instead of `file`. The full setup proc
    the correct derivation containing the rekeyed secrets is copied from your local store
    to the remote host's store.
 
-   - [colmena](https://github.com/zhaofengli/colmena) automatically [copies](https://github.com/zhaofengli/colmena/issues/134) locally available derivations, so no additional care has to be taken here
-   - I didn't test other tools. Please add your experiences here.
+   Any tool that builds locally and uses `nix copy` (or equivalent tools) to copy the derivations
+   to your remote systems will work automatically, so no additional care has to be taken.
+   Only when you strictly build on your remotes, you might have to copy those secrets manually.
+   You can target them by using `agenix rekey --show-out-paths` or by directly referring to `nixosConfigurations.<host>.config.age.rekey.derivation`
 
 ## Secret generation
 
@@ -325,11 +301,10 @@ in the nix-store, which we want to achieve without requiring you to track them i
 
 #### Working with impurity
 
-`agenix-rekey` solves the impurity problem by requiring you to expose an app in your flake,
-which you can invoke with `nix run .#rekey` whenever your secrets need to be rekeyed.
-This script will run in your host-environment and thus is able to prompt for passwords
-or read YubiKeys. It therefore can run `age` to rekey the secrets and since it still
-has access to your host configurations in your flake, it can still access all necessary information.
+`agenix-rekey` solves the impurity problem by following a two-step approach. By adding
+agenix-rekey, you implicitly define a script through your flake which can run in your
+host-environment and is thus able to prompt for passwords or read YubiKeys.
+It can run `age` to rekey the secrets and store them in a temporary cache directory.
 
 #### Predicting store paths to avoid tracking rekeyed secrets
 
@@ -338,13 +313,13 @@ the resulting rekeyed secrets by putting them in a special derivation for each h
 This derivation is made to always fail when the build is invoked transitively by the
 build process, which always means rekeying is necessary.
 
-The `rekey` app will build the same derivation but with special access to the rekeyed
+The `agenix rekey` command will build the same derivation but with special access to the rekeyed
 secrets which will temporarily be stored in a predicable path in `/tmp`, for which
 the sandbox is allowed access to `/tmp` solving the impurity issue. Running the build
 afterwards will succeed since the derivation is now already built and available in
 your local store.
 
-# Module options
+# ❄️ Module options
 
 ## `age.secrets`
 
@@ -387,7 +362,7 @@ If defined, this generator will be used to bootstrap this secret's when it doesn
 | Example | `[ config.age.secrets.basicAuthPw1 nixosConfigurations.machine2.config.age.secrets.basicAuthPw ]` |
 
 Other secrets on which this secret depends. This guarantees that in the final
-`nix run .#generate-secrets` script, all dependencies will be generated before
+`agenix generate` script, all dependencies will be generated before
 this secret is generated, allowing you to use their outputs via the passed `decrypt` function.
 
 The given dependencies will be passed to the defined `script` via the `deps` parameter,
@@ -417,7 +392,7 @@ Refer to the example for a description of the arguments. The resulting
 secret should be written to stdout and any info or errors to stderr.
 
 Note that the script is run with `set -euo pipefail` conditions as the
-normal user that runs `nix run .#generate-secrets`.
+normal user that runs `agenix generate`.
 
 ## `age.secrets.<name>.generator.tags`
 
@@ -427,7 +402,7 @@ normal user that runs `nix run .#generate-secrets`.
 | Example | `["wireguard"]` |
 
 Optional list of tags that may be used to refer to secrets that use this generator.
-Useful to regenerate all secrets matching a specific tag using `nix run .#generate-secrets -f -t wireguard`.
+Useful to regenerate all secrets matching a specific tag using `agenix generate -f -t wireguard`.
 
 ## `age.generators`
 
@@ -444,6 +419,17 @@ Allows defining reusable secret generator scripts. By default these generators a
 - `passphrase`: Generates a 6-word passphrase delimited by spaces
 - `dhparams`: Generates 4096-bit dhparams
 - `ssh-ed25519`: Generates a ssh-ed25519 private key
+
+## `age.rekey.derivation`
+
+| Type    | `package` |
+|-----|-----|
+| Default | A derivation containing the rekeyed secrets for this host |
+| Read-only | yes |
+
+The derivation that contains the rekeyed secrets for this host.
+This exists so you can target the secrets for uploading to a remote host
+if necessary. Cannot be built directly, use `agenix rekey` instead.
 
 ## `age.rekey.generatedSecretsDir`
 
@@ -557,7 +543,7 @@ are password protected.
 | Example | `[./backup-key.pub "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3290gq"]` |
 | Example | `["age1yubikey1qwf..."]` |
 
-When using `nix run .#edit-secret FILE`, the file will be encrypted for all identities in
+When using `agenix edit FILE`, the file will be encrypted for all identities in
 `age.rekey.masterIdentities` by default. Here you can specify an extra set of pubkeys for which
 all secrets should also be encrypted. This is useful in case you want to have a backup identity
 that must be able to decrypt all secrets but should not be used when attempting regular decryption.

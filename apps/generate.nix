@@ -58,7 +58,8 @@
     secret = nodes.${host}.config.age.secrets.${secretName};
     sourceFile = relativeToFlake secret.rekeyFile;
     script = secret.generator._script {
-      inherit secret pkgs lib;
+      inherit secret pkgs;
+      inherit (pkgs) lib;
       file = sourceFile;
       name = secretName;
       decrypt = rageMasterDecrypt;

@@ -16,7 +16,7 @@
   secretsToRekey = flip filterAttrs hostConfig.age.secrets (name: secret: let
     hint =
       if secret.generator != null
-      then "Did you run `[32mnix run .#generate-secrets[m` to generate it and have you added it to git?"
+      then "Did you run `[32magenix generate[m` to generate it and have you added it to git?"
       else "Have you added it to git?";
   in
     assert assertMsg (secret.rekeyFile != null -> builtins.pathExists secret.rekeyFile) "age.secrets.${name}.rekeyFile ([33m${toString secret.rekeyFile}[m) doesn't exist. ${hint}";
@@ -56,7 +56,7 @@ in
 
         function ensure_exists() {
           [[ -e "$1" ]] || {
-            echo "[1;31mAt least one rekeyed secret is missing, please run \`nix run .#rekey\` again.[m" >&2
+            echo "[1;31mAt least one rekeyed secret is missing, please run \`agenix rekey\` again.[m" >&2
             echo "[90m  rekeyed secret: $1[m" >&2
             echo "[90m   source secret: $2[m" >&2
             exit 1
