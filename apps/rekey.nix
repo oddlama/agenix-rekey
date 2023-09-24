@@ -1,11 +1,9 @@
 {
-  lib,
   pkgs,
   nodes,
   ...
 } @ inputs: let
-  inherit
-    (lib)
+  inherit (pkgs.lib)
     attrValues
     concatMapStrings
     concatStringsSep
@@ -53,11 +51,15 @@
         echo "[1;90m    Skipping[m [90m[already rekeyed] "${escapeShellArg hostName}":"${escapeShellArg secretName}"[m"
       else
         mkdir -p ${rekeyedSecrets.cacheDir}/secrets
+        rm ${secretOut}.tmp &>/dev/null || true
         echo "[1;32m    Rekeying[m [90m"${escapeShellArg hostName}":[34m"${escapeShellArg secretName}"[m"
         if ! decrypt ${escapeShellArg secret.rekeyFile} ${escapeShellArg secretName} ${escapeShellArg hostName} \
-          | ${rageHostEncrypt hostCfg} -o ${secretOut}; then
+          | ${rageHostEncrypt hostCfg} -o ${secretOut}.tmp; then
           echo "[1;31mFailed to re-encrypt ${secret.rekeyFile} for ${hostName}![m" >&2
         fi
+        # Make sure to only create the result file if the rekeying was actually successful.
+        # If the first command in the pipe fails, we otherwise create a validly encrypted but empty secret
+        mv ${secretOut}.tmp ${secretOut}
         any_rekeyed=true
       fi
     '';
@@ -82,7 +84,7 @@
     fi
   '';
 in
-  pkgs.writeShellScript "agenix-rekey" ''
+  pkgs.writeShellScriptBin "agenix-rekey" ''
     set -euo pipefail
 
     function die() { echo "[1;31merror:[m $*" >&2; exit 1; }

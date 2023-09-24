@@ -1,11 +1,9 @@
 {
-  lib,
   pkgs,
   nodes,
   ...
 } @ inputs: let
-  inherit
-    (lib)
+  inherit (pkgs.lib)
     any
     assertMsg
     attrNames
@@ -143,7 +141,7 @@
   in
     stringsWithDeps.textClosureMap (x: x) stages (attrNames stages);
 in
-  pkgs.writeShellScript "agenix-generate" ''
+  pkgs.writeShellScriptBin "agenix-generate" ''
     set -euo pipefail
 
     function die() { echo "[1;31merror:[m $*" >&2; exit 1; }

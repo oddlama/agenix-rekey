@@ -1,12 +1,11 @@
 {
   userFlake,
-  lib,
   pkgs,
   nodes,
   ...
 }: let
   inherit
-    (lib)
+    (pkgs.lib)
     concatLists
     concatMapStrings
     concatStringsSep

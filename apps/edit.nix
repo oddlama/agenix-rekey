@@ -1,10 +1,6 @@
-{
-  lib,
-  pkgs,
-  ...
-} @ inputs: let
+{ pkgs, ... } @ inputs: let
   inherit
-    (lib)
+    (pkgs.lib)
     concatStringsSep
     escapeShellArg
     filter
@@ -32,7 +28,7 @@
   # Relative path to all rekeyable secrets. Filters and warns on paths that are not part of the root flake.
   validRelativeSecretPaths = builtins.sort (a: b: a < b) (filter (x: x != null) (map relativeToFlake mergedSecrets));
 in
-  pkgs.writeShellScript "agenix-edit" ''
+  pkgs.writeShellScriptBin "agenix-edit" ''
     set -uo pipefail
 
     function die() { echo "[1;31merror:[m $*" >&2; exit 1; }

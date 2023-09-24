@@ -1,4 +1,6 @@
-{
+# XXX: this whole file is used for defineApps, which is deprecated and will
+# be removed in the future (2024)
+args @ {
   # The path of the user's flake. Needed to run a sandbox-relaxed
   # app that saves the rekeyed outputs.
   userFlake,
@@ -6,22 +8,17 @@
   pkgs,
   # All nixos definitions that should be considered for rekeying
   nodes,
-}: let
-  args = {
-    inherit userFlake pkgs nodes;
-    inherit (pkgs) lib;
-  };
-in {
+}: {
   edit-secret = {
     type = "app";
-    program = toString (import ./edit-secret.nix args);
+    program = "${import ./edit.nix args}/bin/agenix-edit";
   };
   rekey = {
     type = "app";
-    program = toString (import ./rekey.nix args);
+    program = "${import ./rekey.nix args}/bin/agenix-rekey";
   };
   generate-secrets = {
     type = "app";
-    program = toString (import ./generate-secrets.nix args);
+    program = "${import ./generate.nix args}/bin/agenix-generate";
   };
 }

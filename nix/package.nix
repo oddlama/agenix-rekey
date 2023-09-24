@@ -1,19 +1,9 @@
 {
   lib,
   writeShellScriptBin,
-}: let
-  allApps = ["edit-secret" "generate-secrets" "rekey"];
-  caseForApp = app: ''
-    # Command ${app}
-    ${lib.escapeShellArg app})
-      echo "Indexing secrets..."
-      SCRIPT=$(nix-build ${../apps/wrapper.nix} \
-        --argstr userFlakePath "$(realpath -e .)" \
-        --arg app ${../apps/${app}.nix})
-        exec "$SCRIPT" "$@"
-      ;;
-    '';
-in writeShellScriptBin "agenix" ''
+  stdenv,
+  allApps,
+}: writeShellScriptBin "agenix" ''
   set -euo pipefail
 
   function die() { echo "[1;31merror:[m $*" >&2; exit 1; }
@@ -39,17 +29,18 @@ in writeShellScriptBin "agenix" ''
     exit 1
   }
 
-  COMMAND=$1
-  shift
-
-  case "$COMMAND" in
+  case "$1" in
     "help"|"--help"|"-help"|"-h")
       show_help
       exit 1
       ;;
 
-    ${lib.concatMapStrings caseForApp allApps}
+    ${lib.concatStringsSep "|" allApps})
+      APP=$1
+      shift
+      exec nix run .#agenix-rekey.apps.${lib.escapeShellArg stdenv.hostPlatform.system}."$APP" -- "$@"
+      ;;
 
-    *) die "Unknown command: $COMMAND" ;;
+    *) die "Unknown command: $1" ;;
   esac
 ''
