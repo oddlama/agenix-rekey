@@ -58,13 +58,12 @@ in
           [[ -e "$1" ]] || {
             echo "[1;31mAt least one rekeyed secret is missing, please run \`agenix rekey\` again.[m" >&2
             echo "[90m  rekeyed secret: $1[m" >&2
-            echo "[90m   source secret: $2[m" >&2
             exit 1
           }
         }
       ''
       + flip concatMapStrings (attrValues secretsToRekey) (secret: ''
-        ensure_exists ${cachePathFor secret} ${escapeShellArg secret.rekeyFile}
+        ensure_exists ${cachePathFor secret}
         cp -v ${cachePathFor secret} "$out/"${escapeShellArg "${secret.name}.age"}
       '');
 
