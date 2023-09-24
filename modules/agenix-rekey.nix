@@ -63,8 +63,8 @@ nixpkgs: {
           have a generator. This is useful if you want to create derived secrets,
           such as generating a .htpasswd file from several basic auth passwords.
 
-          You can refer to age secrets of other systems, as long as all relevant systems
-          are passed to the agenix-rekey app definition via the nixosConfigurations parameter.
+          You may refer to age secrets of other nixos hosts as long as all hosts
+          are rekeyed via the same flake.
         '';
       };
 

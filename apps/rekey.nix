@@ -1,7 +1,7 @@
 {
   lib,
   pkgs,
-  nixosConfigurations,
+  nodes,
   ...
 } @ inputs: let
   inherit
@@ -82,14 +82,13 @@
     fi
   '';
 in
-  pkgs.writeShellScript "rekey" ''
+  pkgs.writeShellScript "agenix-rekey" ''
     set -euo pipefail
 
     function die() { echo "[1;31merror:[m $*" >&2; exit 1; }
     function show_help() {
-      echo 'app rekey - Re-encrypts secrets for hosts that require them'
-      echo ""
-      echo "nix run .#rekey [OPTIONS]"
+      echo 'Usage: agenix rekey [OPTIONS]'
+      echo "Re-encrypts secrets for hosts that require them."
       echo ""
       echo 'OPTIONS:'
       echo '-h, --help                Show help'
@@ -109,11 +108,11 @@ in
     }
 
     function show_out_paths() {
-      ${concatMapStrings (x: "echo ${escapeShellArg (outPathFor x)}\n") (attrValues nixosConfigurations)}
+      ${concatMapStrings (x: "echo ${escapeShellArg (outPathFor x)}\n") (attrValues nodes)}
     }
 
     function show_drv_paths() {
-      ${concatMapStrings (x: "echo ${escapeShellArg (drvPathFor x)}\n") (attrValues nixosConfigurations)}
+      ${concatMapStrings (x: "echo ${escapeShellArg (drvPathFor x)}\n") (attrValues nodes)}
     }
 
     DUMMY=false
@@ -207,7 +206,7 @@ in
     STORE_PATHS_TO_DELETE=()
     DRVS_TO_BUILD=()
 
-    ${concatStringsSep "\n" (mapAttrsToList rekeyCommandsForHost nixosConfigurations)}
+    ${concatStringsSep "\n" (mapAttrsToList rekeyCommandsForHost nodes)}
 
     if [[ "''${#STORE_PATHS_TO_DELETE[@]}" -gt 0 ]]; then
       echo "[1;31m    Deleting[m [31m''${#STORE_PATHS_TO_DELETE[@]} marked store paths[m"

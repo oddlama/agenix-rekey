@@ -1,7 +1,7 @@
 {
   lib,
   pkgs,
-  nixosConfigurations,
+  nodes,
   ...
 } @ inputs: let
   inherit
@@ -48,8 +48,8 @@
       (host:
         any
         (s: s.id == secret.id && s.rekeyFile == secret.rekeyFile)
-        (attrValues nixosConfigurations.${host}.config.age.secrets))
-      (attrNames nixosConfigurations);
+        (attrValues nodes.${host}.config.age.secrets))
+      (attrNames nodes);
   in
     warnIf (length matchingHosts > 1) "Multiple hosts provide a secret with rekeyFile=[33m${toString secret.rekeyFile}[m, which may have undesired side effects when used in secret generator dependencies."
     (head matchingHosts);
@@ -57,7 +57,7 @@
   # Add the given secret to the set, indexed by its relative path.
   # If the path already exists, this makes sure that the definition is the same.
   addGeneratedSecretChecked = host: set: secretName: let
-    secret = nixosConfigurations.${host}.config.age.secrets.${secretName};
+    secret = nodes.${host}.config.age.secrets.${secretName};
     sourceFile = relativeToFlake secret.rekeyFile;
     script = secret.generator._script {
       inherit secret pkgs lib;
@@ -94,8 +94,8 @@
     foldl'
     (set: host:
       foldl' (addGeneratedSecretChecked host) set
-      (attrNames nixosConfigurations.${host}.config.age.secrets))
-    {} (attrNames nixosConfigurations);
+      (attrNames nodes.${host}.config.age.secrets))
+    {} (attrNames nodes);
 
   # The command that actually generates a secret.
   secretGenerationCommand = contextSecret: ''
@@ -143,14 +143,13 @@
   in
     stringsWithDeps.textClosureMap (x: x) stages (attrNames stages);
 in
-  pkgs.writeShellScript "generate-secrets" ''
+  pkgs.writeShellScript "agenix-generate" ''
     set -euo pipefail
 
     function die() { echo "[1;31merror:[m $*" >&2; exit 1; }
     function show_help() {
-      echo 'app generate-secrets - Creates secrets using their generators'
-      echo ""
-      echo "nix run .#generate-secrets [OPTIONS] [SECRET]..."
+      echo 'Usage: agenix generate [OPTIONS] [SECRET...]'
+      echo "Automatically generates secrets that have generators."
       echo ""
       echo 'OPTIONS:'
       echo '-h, --help                Show help'

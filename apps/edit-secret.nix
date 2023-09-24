@@ -1,7 +1,6 @@
 {
   lib,
   pkgs,
-  nixosConfigurations,
   ...
 } @ inputs: let
   inherit
@@ -33,14 +32,13 @@
   # Relative path to all rekeyable secrets. Filters and warns on paths that are not part of the root flake.
   validRelativeSecretPaths = builtins.sort (a: b: a < b) (filter (x: x != null) (map relativeToFlake mergedSecrets));
 in
-  pkgs.writeShellScript "edit-secret" ''
+  pkgs.writeShellScript "agenix-edit" ''
     set -uo pipefail
 
     function die() { echo "[1;31merror:[m $*" >&2; exit 1; }
     function show_help() {
-      echo 'app edit-secret - create/edit age secret files with $EDITOR'
-      echo ""
-      echo "nix run .#edit-secret [OPTIONS] [FILE]"
+      echo 'Usage: agenix edit [OPTIONS] [FILE]'
+      echo 'Create/edit age secret files with $EDITOR and your master identity'
       echo ""
       echo 'OPTIONS:'
       echo '-h, --help                Show help'

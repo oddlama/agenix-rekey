@@ -2,7 +2,7 @@
   userFlake,
   lib,
   pkgs,
-  nixosConfigurations,
+  nodes,
   ...
 }: let
   inherit
@@ -19,7 +19,7 @@
     ;
 
   # Collect rekeying options from all hosts
-  mergeArray = f: unique (concatLists (mapAttrsToList (_: f) nixosConfigurations));
+  mergeArray = f: unique (concatLists (mapAttrsToList (_: f) nodes));
   mergedAgePlugins = mergeArray (x: x.config.age.rekey.agePlugins or []);
   mergedMasterIdentities = mergeArray (x: x.config.age.rekey.masterIdentities or []);
   mergedExtraEncryptionPubkeys = mergeArray (x: x.config.age.rekey.extraEncryptionPubkeys or []);
