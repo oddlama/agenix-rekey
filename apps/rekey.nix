@@ -3,14 +3,14 @@
   nodes,
   ...
 } @ inputs: let
-  inherit (pkgs.lib)
+  inherit
+    (pkgs.lib)
     attrValues
     concatMapStrings
     concatStringsSep
     escapeShellArg
     filterAttrs
     mapAttrsToList
-    removeSuffix
     ;
 
   inherit

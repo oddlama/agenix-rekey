@@ -3,7 +3,8 @@
   nodes,
   ...
 } @ inputs: let
-  inherit (pkgs.lib)
+  inherit
+    (pkgs.lib)
     any
     assertMsg
     attrNames
@@ -18,7 +19,6 @@
     head
     length
     mapAttrs
-    nameValuePair
     removePrefix
     stringsWithDeps
     warnIf
@@ -102,9 +102,9 @@
       # dependency was modified since its last generation
       dep_mtimes=(
         1 # Have at least one entry
-        ${concatStringsSep "\n" (flip map contextSecret.secret.generator.dependencies (dep:
-          "\"$(stat -c %Y ${escapeShellArg (relativeToFlake dep.rekeyFile)} 2>/dev/null || echo 1)\""
-        ))}
+        ${concatStringsSep "\n" (flip map contextSecret.secret.generator.dependencies (
+      dep: "\"$(stat -c %Y ${escapeShellArg (relativeToFlake dep.rekeyFile)} 2>/dev/null || echo 1)\""
+    ))}
       )
       mtime_newest_dep=$(IFS=$'\n'; sort -nr <<< "''${dep_mtimes[*]}" | head -n1)
       mtime_this=$(stat -c %Y ${escapeShellArg contextSecret.sourceFile} 2>/dev/null || echo 0)
@@ -134,10 +134,10 @@
   # Any dependencies of generators are guaranteed to come first, such that
   # generators may use the result of other secrets.
   orderedGenerationCommands = let
-    stages = flip mapAttrs secretsWithContext (i: contextSecret:
+    stages = flip mapAttrs secretsWithContext (_: contextSecret:
       stringsWithDeps.fullDepEntry
-      (secretGenerationCommand secretsWithContext.${i})
-      (map (x: relativeToFlake x.rekeyFile) secretsWithContext.${i}.secret.generator.dependencies));
+      (secretGenerationCommand contextSecret)
+      (map (x: relativeToFlake x.rekeyFile) contextSecret.secret.generator.dependencies));
   in
     stringsWithDeps.textClosureMap (x: x) stages (attrNames stages);
 in

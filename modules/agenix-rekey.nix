@@ -9,7 +9,6 @@ nixpkgs: {
     (lib)
     all
     concatMapStrings
-    escapeShellArg
     filter
     flatten
     flip
@@ -232,9 +231,10 @@ in {
 
           rekeyFile = mkOption {
             type = types.nullOr types.path;
-            default = if config.age.rekey.generatedSecretsDir != null
-                      then config.age.rekey.generatedSecretsDir + "/${submod.config.id}.age"
-                      else null;
+            default =
+              if config.age.rekey.generatedSecretsDir != null
+              then config.age.rekey.generatedSecretsDir + "/${submod.config.id}.age"
+              else null;
             example = literalExpression "./secrets/password.age";
             description = ''
               The path to the encrypted .age file for this secret. The file must
@@ -253,7 +253,7 @@ in {
           generator = mkOption {
             type = types.nullOr generatorType;
             default = null;
-            example = { script = "passphrase"; };
+            example = {script = "passphrase";};
             description = "If defined, this generator will be used to bootstrap this secret's when it doesn't exist.";
           };
         };
