@@ -170,15 +170,29 @@ to use rekeying is to specify `rekeyFile` instead of `file` on your secrets. The
 
 4. Deploy your system as usual by using `nixos-rebuild` or your favourite deployment tool.
    In case you need to rekey, you will be prompted to do that as part of a build failure that will be triggered.
+   Since we just did the initial setup, you should rekey right away:
 
-   If you are deploying your configuration to remote systems, you need to make sure that
-   the correct derivation containing the rekeyed secrets is copied from your local store
-   to the remote host's store.
+    ```bash
+    > agenix rekey
+    ```
 
-   Any tool that builds locally and uses `nix copy` (or equivalent tools) to copy the derivations
-   to your remote systems will work automatically, so no additional care has to be taken.
-   Only when you strictly build on your remotes, you might have to copy those secrets manually.
-   You can target them by using `agenix rekey --show-out-paths` or by directly referring to `nixosConfigurations.<host>.config.age.rekey.derivation`
+    > [!WARNING]
+    > Since `agenix rekey` must be able to set extra sandbox paths, your user must either be a `trusted-users` in your `nix.conf`,
+    > or you need to add `age.rekey.cacheDir` as a global extra sandbox path:
+    >
+    > ```nix
+    > nix.settings.extra-sandbox-paths = ["/tmp/agenix-rekey"];
+    > ```
+
+    > [!NOTE]
+    > If you are deploying your configuration to remote systems, you need to make sure that
+    > the correct derivation containing the rekeyed secrets is copied from your local store
+    > to the remote host's store.
+    >
+    > Any tool that builds locally and uses `nix copy` (or equivalent tools) to copy the derivations
+    > to your remote systems will work automatically, so no additional care has to be taken.
+    > Only when you strictly build on your remotes, you might have to copy those secrets manually.
+    > You can target them by using `agenix rekey --show-out-paths` or by directly referring to `nixosConfigurations.<host>.config.age.rekey.derivation`
 
 ## Secret generation
 
