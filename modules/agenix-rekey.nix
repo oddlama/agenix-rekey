@@ -259,7 +259,7 @@ in {
         };
         config = {
           # Produce a rekeyed age secret
-          file = mkIf (submod.config.rekeyFile != null) "${rekeyedSecrets}/${submod.config.id}.age";
+          file = mkIf (submod.config.rekeyFile != null) "${rekeyedSecrets}/${submod.config.name}.age";
         };
       }));
     };
