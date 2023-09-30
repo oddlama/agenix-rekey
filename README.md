@@ -181,8 +181,10 @@ to use rekeying is to specify `rekeyFile` instead of `file` on your secrets. The
     > or you need to add `age.rekey.cacheDir` as a global extra sandbox path:
     >
     > ```nix
-    > nix.settings.extra-sandbox-paths = ["/tmp/agenix-rekey"];
+    > nix.settings.extra-sandbox-paths = ["/tmp/agenix-rekey.${config.users.users.youruser.uid}"];
     > ```
+    >
+    > See [issue #9](https://github.com/oddlama/agenix-rekey/issues/9) for more information about a user-agnostic setup.
 
     > [!NOTE]
     > If you are deploying your configuration to remote systems, you need to make sure that
