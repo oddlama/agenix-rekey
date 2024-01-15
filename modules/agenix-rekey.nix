@@ -450,6 +450,11 @@ in {
     hex = {pkgs, ...}: "${pkgs.openssl}/bin/openssl rand -hex 24";
     passphrase = {pkgs, ...}: "${pkgs.xkcdpass}/bin/xkcdpass --numwords=6 --delimiter=' '";
     dhparams = {pkgs, ...}: "${pkgs.openssl}/bin/openssl dhparam 4096";
-    ssh-ed25519 = {pkgs, ...}: ''(exec 3>&1; ${pkgs.openssh}/bin/ssh-keygen -q -t ed25519 -N "" -f /proc/self/fd/3 <<<y >/dev/null 2>&1; true)'';
+    ssh-ed25519 = {
+      lib,
+      name,
+      pkgs,
+      ...
+    }: ''(exec 3>&1; ${pkgs.openssh}/bin/ssh-keygen -q -t ed25519 -N "" -C ${lib.escapeShellArg "${config.networking.hostName}:${name}"} -f /proc/self/fd/3 <<<y >/dev/null 2>&1; true)'';
   };
 }
