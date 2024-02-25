@@ -46,24 +46,29 @@
         nodes,
         # The package sets to use. pkgs.${system} must yield an initialized nixpkgs package set
         pkgs ? self.pkgs,
+        # A function that returns the age package given a package set. Use
+        # this to override which tools is used for encrypting / decrypting.
+        # Defaults to rage (pkgs.rage). We only guarantee compatibility for
+        # pkgs.age and pkgs.rage.
+        agePackage ? (p: p.rage),
       }:
         flake-utils.lib.eachDefaultSystem (system: {
           apps = pkgs.${system}.lib.genAttrs allApps (app:
             import ./apps/${app}.nix {
-              inherit nodes userFlake;
+              inherit nodes userFlake agePackage;
               pkgs = pkgs.${system};
             });
         });
 
-      # XXX: deprecated, scheduled for removal in 2024. Use the package instead of
+      # XXX: deprecated, scheduled for removal in late 2024. Use the package instead of
       # defining apps. This is just a compatibility wrapper that defines apps with
       # the same interface as before.
       defineApps = argsOrSelf: pkgs: nodes:
         pkgs.lib.warn ''
           The `agenix-rekey.defineApps self pkgs nodes` function is deprecated and will
-          be removed in 2024. The new approach will unclutter your flake's app definitions
+          be removed late 2024. The new approach will unclutter your flake's app definitions
           and provide a hermetic entrypoint for agenix-rekey, which can be accessed more
-          egonomically via a new CLI wrapper 'agenix'. Alternatively via you can still run
+          egonomically via a new CLI wrapper 'agenix'. Alternatively you can still run
           the scripts directly from your flake using `nix run .#agenix-rekey.apps.$system.<app>`,
           in case you don't want to use the wrapper.
 

@@ -27,8 +27,8 @@
   inherit
     (import ../nix/lib.nix inputs)
     userFlakeDir
-    rageMasterDecrypt
-    rageMasterEncrypt
+    ageMasterDecrypt
+    ageMasterEncrypt
     ;
 
   relativeToFlake = filePath: let
@@ -62,7 +62,7 @@
       inherit (pkgs) lib;
       file = sourceFile;
       name = secretName;
-      decrypt = rageMasterDecrypt;
+      decrypt = ageMasterDecrypt;
       deps = flip map secret.generator.dependencies (dep:
         assert assertMsg (dep.generator != null)
         "The given dependency with rekeyFile=${dep.rekeyFile} is a secret without a generator."; {
@@ -118,7 +118,7 @@
           ${contextSecret.script}
         ) || die "Generator exited with status $?."
 
-        ${rageMasterEncrypt} -o ${escapeShellArg contextSecret.sourceFile} <<< "$content" \
+        ${ageMasterEncrypt} -o ${escapeShellArg contextSecret.sourceFile} <<< "$content" \
           || die "Failed to generate or encrypt secret."
 
         if [[ "$ADD_TO_GIT" == true ]]; then

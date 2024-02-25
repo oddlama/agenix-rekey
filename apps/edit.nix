@@ -1,4 +1,4 @@
-{ pkgs, ... } @ inputs: let
+{pkgs, ...} @ inputs: let
   inherit
     (pkgs.lib)
     concatStringsSep
@@ -14,8 +14,8 @@
     (import ../nix/lib.nix inputs)
     userFlakeDir
     mergedSecrets
-    rageMasterEncrypt
-    rageMasterDecrypt
+    ageMasterEncrypt
+    ageMasterDecrypt
     ;
 
   relativeToFlake = filePath: let
@@ -76,9 +76,9 @@ in
     case "''${#POSITIONAL_ARGS[@]}" in
       0)
         ${optionalString (builtins.length validRelativeSecretPaths == 0) ''
-        die "No relevant secret definitions were found for any host. Pass a filename to create a new secret regardless of whether it is already used."
-        break
-        ''}
+      die "No relevant secret definitions were found for any host. Pass a filename to create a new secret regardless of whether it is already used."
+      break
+    ''}
         FILE=$(echo ${escapeShellArg (concatStringsSep "\n" validRelativeSecretPaths)} \
           | ${pkgs.fzf}/bin/fzf --tiebreak=end --bind=tab:down,btab:up,change:top --height='~50%' --tac --cycle --layout=reverse) \
           || die "No file selected. Aborting."
@@ -113,7 +113,7 @@ in
     if [[ -e "$FILE" ]]; then
       [[ -z ''${INFILE+x} ]] || die "Refusing to overwrite existing file when using --input"
 
-      ${rageMasterDecrypt} -o "$CLEARTEXT_FILE" "$FILE" \
+      ${ageMasterDecrypt} -o "$CLEARTEXT_FILE" "$FILE" \
         || die "Failed to decrypt file. Aborting."
     else
       mkdir -p "$(dirname "$FILE")" \
@@ -143,7 +143,7 @@ in
       exit 0
     fi
 
-    ${rageMasterEncrypt} -o "$ENCRYPTED_FILE" "$CLEARTEXT_FILE" \
+    ${ageMasterEncrypt} -o "$ENCRYPTED_FILE" "$CLEARTEXT_FILE" \
       || die "Failed to (re)encrypt edited file, original is left unchanged."
     cp --no-preserve=all "$ENCRYPTED_FILE" "$FILE" # cp instead of mv preserves original attributes and permissions
 

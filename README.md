@@ -306,6 +306,19 @@ which are also generated automatically:
 }
 ```
 
+## Using age instead of rage
+
+If you don't want to use rage for some reason, you can specify a compatible
+alternative tool in your top-level configure call:
+
+```nix
+agenix-rekey = agenix-rekey.configure {
+  userFlake = self;
+  nodes = self.nixosConfigurations;
+  agePackage = p: p.age;
+};
+```
+
 ## How does it work?
 
 The central problem is that rekeying secrets on-the-fly while building your system

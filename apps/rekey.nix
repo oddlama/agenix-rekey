@@ -15,8 +15,8 @@
 
   inherit
     (import ../nix/lib.nix inputs)
-    rageHostEncrypt
-    rageMasterDecrypt
+    ageHostEncrypt
+    ageMasterDecrypt
     ;
 
   # The derivation containing the resulting rekeyed secrets for
@@ -54,7 +54,7 @@
         rm ${secretOut}.tmp &>/dev/null || true
         echo "[1;32m    Rekeying[m [90m"${escapeShellArg hostName}":[34m"${escapeShellArg secretName}"[m"
         if ! decrypt ${escapeShellArg secret.rekeyFile} ${escapeShellArg secretName} ${escapeShellArg hostName} \
-          | ${rageHostEncrypt hostCfg} -o ${secretOut}.tmp; then
+          | ${ageHostEncrypt hostCfg} -o ${secretOut}.tmp; then
           echo "[1;31mFailed to re-encrypt ${secret.rekeyFile} for ${hostName}![m" >&2
         fi
         # Make sure to only create the result file if the rekeying was actually successful.
@@ -171,7 +171,7 @@ in
       # Outer loop, allows us to retry the command
       while true; do
         # Try command
-        if ${rageMasterDecrypt} "$secret_file"; then
+        if ${ageMasterDecrypt} "$secret_file"; then
           return
         fi
 
