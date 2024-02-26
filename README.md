@@ -34,7 +34,7 @@ To function properly, agenix-rekey has to do some nix gymnastics. You can read m
 
 ## Overview
 
-When using agenix-reke, you will have an `agenix` command to run secret-related actions on your flake.
+When using agenix-rekey, you will have an `agenix` command to run secret-related actions on your flake.
 This is a replacement for the command provided by agenix, which you won't need anymore.
 There are several apps/subcommands which you can use to manage your secrets:
 
@@ -65,8 +65,8 @@ if you don't want to use the wrapper, which may be useful for use in your own sc
   inputs.agenix.url = "github:ryantm/agenix";
   inputs.agenix-rekey.url = "github:oddlama/agenix-rekey";
   # Make sure to override the nixpkgs version to follow your flake,
-  # otherwise derivation paths can mismatch, resulting in the rekeyed
-  # secrets not being found!
+  # otherwise derivation paths can mismatch (when using storageMode = "derivation"),
+  # resulting in the rekeyed secrets not being found!
   inputs.agenix-rekey.inputs.nixpkgs.follows = "nixpkgs";
   # also works with inputs.ragenix.url = ...;
   # ...
@@ -110,6 +110,10 @@ if you don't want to use the wrapper, which may be useful for use in your own sc
 }
 ```
 
+You have the choice between two storage modes for your rekeyed secrets, which
+are fundamentally different from each other. You can freely switch between them,
+see [here]() for more information.
+
 ## Usage
 
 Since agenix-rekey is just an extension to agenix, everything you know about agenix still applies as usual.
@@ -121,6 +125,9 @@ to use rekeying is to specify `rekeyFile` instead of `file` on your secrets. The
    but all other options (like your master identity) will usually be the same across hosts.
    You can find more options in the api reference below.
 
+   We will be using the local storage mode by default, which will store the rekeyed secrets in
+   your own repository.
+
     ```nix
     {
       age.rekey = {
@@ -130,6 +137,10 @@ to use rekeying is to specify `rekeyFile` instead of `file` on your secrets. The
         masterIdentities = [ ./your-yubikey-identity.pub ];
         #masterIdentities = [ "/home/myuser/master-key" ]; # External master key
         #masterIdentities = [ "/home/myuser/master-key.age" ]; # Password protected external master key
+        storageMode = "local";
+        # Choose a directory to store the rekeyed secrets for this host.
+        # This cannot be shared with other hosts.
+        localStorageDir = ./secrets/rekeyed/${config.networking.hostName};
       };
     }
     ```
@@ -173,12 +184,15 @@ to use rekeying is to specify `rekeyFile` instead of `file` on your secrets. The
    Since we just did the initial setup, you should rekey right away:
 
     ```bash
-    > agenix rekey
+    > agenix rekey -a # -a will add them to git when you use local storage mode
     ```
 
+    Don't forget to add the rekeyed secrets afterwards to make them visible to the build process.
+
     > [!WARNING]
-    > Since `agenix rekey` must be able to set extra sandbox paths, your user must either be a `trusted-users` in your `nix.conf`,
-    > or you need to add `age.rekey.cacheDir` as a global extra sandbox path:
+    > If you use `storageMode = "derivation"`, `agenix rekey` must be able to set extra
+    > sandbox paths. This you need to add `age.rekey.cacheDir` as a global extra sandbox path
+    > (DO NOT add your user to trusted-users instead, this would basically grant them root access!):
     >
     > ```nix
     > nix.settings.extra-sandbox-paths = ["/tmp/agenix-rekey.${config.users.users.youruser.uid}"];
@@ -187,9 +201,9 @@ to use rekeying is to specify `rekeyFile` instead of `file` on your secrets. The
     > See [issue #9](https://github.com/oddlama/agenix-rekey/issues/9) for more information about a user-agnostic setup.
 
     > [!NOTE]
-    > If you are deploying your configuration to remote systems, you need to make sure that
-    > the correct derivation containing the rekeyed secrets is copied from your local store
-    > to the remote host's store.
+    > If you use `storageMode = "derivation"`, and you are deploying your configuration to
+    > remote systems, you need to make sure that the correct derivation containing the
+    > rekeyed secrets is copied from your local store to the remote host's store.
     >
     > Any tool that builds locally and uses `nix copy` (or equivalent tools) to copy the derivations
     > to your remote systems will work automatically, so no additional care has to be taken.
@@ -313,11 +327,41 @@ alternative tool in your top-level configure call:
 
 ```nix
 agenix-rekey = agenix-rekey.configure {
-  userFlake = self;
-  nodes = self.nixosConfigurations;
+  # ...
   agePackage = p: p.age;
 };
 ```
+
+## Storage Modes
+
+You have the choice between two storage modes for your rekeyed secrets, which
+are fundamentally different from each other. You can freely switch between them at any time.
+
+Option one is to store the rekeyed secrets locally in your repository (`local`), option two is to
+transparently store them in a derivation that will be created automatically (`derivation`).
+If in doubt use `local` which is more flexible and pure, but keep in mind that `derivation`
+can be more secure for certain cases. It uses more "magic" to hide some details and might be
+simpler to use if you only build on one host and don't care about remote building / CI.
+The choice depends on your organizational preferences and threat model.
+
+#### `derivation`
+
+Previously this was the default mode. All rekeyed secrets for each host will
+be collected in a derivation which copies them to the nix store when it is built using `agenix rekey`.
+
+- **Pro:** The entire process is stateless and rekeyed secrets are never committed to your repository.
+- **Con:** You cannot easily build your host from a CI/any host that hasn't access to your (yubi)key
+  except by manually uploading the derivations to the CI after rekeying.
+
+#### `local`
+
+All rekeyed secrets will be saved to a local folder in your flake when running `agenix rekey`.
+Agenix will use these local files directly, without requiring any extra derivations. This is the simpler
+approach and has less edge-cases.
+
+- **Pro:** System building stays pure, no need for sandbox shenanigans. -> System can be built without access to the (yubi)key.
+- **Con:** If your repository is public and one of your hosts is compromised, an attacker may decrypt
+  any secret that was ever encrypted for that host. This includes secrets that are in the git history.
 
 ## How does it work?
 
@@ -449,17 +493,6 @@ Allows defining reusable secret generator scripts. By default these generators a
 - `dhparams`: Generates 4096-bit dhparams
 - `ssh-ed25519`: Generates a ssh-ed25519 private key
 
-## `age.rekey.derivation`
-
-| Type    | `package` |
-|-----|-----|
-| Default | A derivation containing the rekeyed secrets for this host |
-| Read-only | yes |
-
-The derivation that contains the rekeyed secrets for this host.
-This exists so you can target the secrets for uploading to a remote host
-if necessary. Cannot be built directly, use `agenix rekey` instead.
-
 ## `age.rekey.generatedSecretsDir`
 
 | Type    | `nullOr path` |
@@ -471,12 +504,73 @@ The path where all generated secrets should be stored by default.
 If set, this automatically sets `age.secrets.<name>.rekeyFile` to a default
 value in this directory, for any secret that defines a generator.
 
+## `age.rekey.storageMode`
+
+| Type    | `enum ["derivation" "local"]` |
+|-----|-----|
+| Default | `"local"` |
+| Example | `"derivation"` |
+
+You have the choice between two storage modes for your rekeyed secrets, which
+are fundamentally different from each other. You can freely switch between them at any time.
+
+Option one is to store the rekeyed secrets locally in your repository (`local`), option two is to
+transparently store them in a derivation that will be created automatically (`derivation`).
+If in doubt use `local` which is more flexible and pure, but keep in mind that `derivation`
+can be more secure for certain cases. It uses more "magic" to hide some details and might be
+simpler to use if you only build on one host and don't care about remote building / CI.
+The choice depends on your organizational preferences and threat model.
+
+#### `derivation`
+
+Previously this was the default mode. All rekeyed secrets for each host will
+be collected in a derivation which copies them to the nix store when it is built using `agenix rekey`.
+
+- **Pro:** The entire process is stateless and rekeyed secrets are never committed to your repository.
+- **Con:** You cannot easily build your host from a CI/any host that hasn't access to your (yubi)key
+  except by manually uploading the derivations to the CI after rekeying.
+
+#### `local`
+
+All rekeyed secrets will be saved to a local folder in your flake when running `agenix rekey`.
+Agenix will use these local files directly, without requiring any extra derivations. This is the simpler
+approach and has less edge-cases.
+
+- **Pro:** System building stays pure, no need for sandbox shenanigans. -> System can be built without access to the (yubi)key.
+- **Con:** If your repository is public and one of your hosts is compromised, an attacker may decrypt
+  any secret that was ever encrypted for that host. This includes secrets that are in the git history.
+
+## `age.rekey.localStorageDir`
+
+| Type    | `str` |
+|-----|-----|
+| Default | `"secrets/rekeyed"` |
+
+Only used when `storageMode = "local"`.
+
+The local storage directory for rekeyed secrets, relative to the root directory of your flake.
+
+## `age.rekey.derivation`
+
+| Type    | `package` |
+|-----|-----|
+| Default | A derivation containing the rekeyed secrets for this host |
+| Read-only | yes |
+
+Only used when `storageMode = "derivation"`.
+
+The derivation that contains the rekeyed secrets for this host.
+This exists so you can target the secrets for uploading to a remote host
+if necessary. Cannot be built directly, use `agenix rekey` instead.
+
 ## `age.rekey.cacheDir`
 
 | Type    | `str` |
 |-----|-----|
 | Default | `"/tmp/agenix-rekey.\"$UID\""` |
 | Example | `"\"\${XDG_CACHE_HOME:=$HOME/.cache}/agenix-rekey\""` |
+
+Only used when `storageMode = "derivation"`.
 
 This is the directory where we store the rekeyed secrets
 so that they can be found later by the derivation builder.
@@ -499,6 +593,8 @@ a deterministic path for each secret.
 |-----|-----|
 | Default | `null` |
 | Example | `"x86_64-linux"` |
+
+Only used when `storageMode = "derivation"`.
 
 If set, this will force that all secrets are rekeyed on a system of the given architecture.
 This is important if you have several hosts with different architectures, since you usually

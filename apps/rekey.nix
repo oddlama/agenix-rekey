@@ -5,16 +5,22 @@
 } @ inputs: let
   inherit
     (pkgs.lib)
+    assertMsg
     attrValues
     concatMapStrings
     concatStringsSep
     escapeShellArg
+    filter
     filterAttrs
+    flip
+    hasPrefix
     mapAttrsToList
+    removePrefix
     ;
 
   inherit
     (import ../nix/lib.nix inputs)
+    userFlakeDir
     ageHostEncrypt
     ageMasterDecrypt
     ;
@@ -32,59 +38,138 @@
   outPathFor = hostCfg: builtins.unsafeDiscardStringContext (toString (derivationFor hostCfg).outPath);
   drvPathFor = hostCfg: builtins.unsafeDiscardStringContext (toString (derivationFor hostCfg).drvPath);
 
+  nodesWithDerivationStorage = filter (x: x.config.age.rekey.storageMode == "derivation") (attrValues nodes);
+
   rekeyCommandsForHost = hostName: hostCfg: let
-    # The derivation containing the resulting rekeyed secrets
-    rekeyedSecrets = derivationFor hostCfg;
-
     # All secrets that have rekeyFile set. These will be rekeyed.
-    secretsToRekey = filterAttrs (_: v: v.rekeyFile != null) hostCfg.config.age.secrets;
-    # The resulting store path for this host's rekeyed secrets
-    outPath = escapeShellArg (outPathFor hostCfg);
-    # The builder which we can use to realise the derivation
-    drvPath = escapeShellArg (drvPathFor hostCfg);
+    secretsToRekey = flip filterAttrs hostCfg.config.age.secrets (name: secret: let
+      hint =
+        if secret.generator != null
+        then "Did you run `[32magenix generate[m` to generate it and have you added it to git?"
+        else "Have you added it to git?";
+    in
+      assert assertMsg (secret.rekeyFile != null -> builtins.pathExists secret.rekeyFile) "age.secrets.${name}.rekeyFile ([33m${toString secret.rekeyFile}[m) doesn't exist. ${hint}";
+        secret.rekeyFile != null);
+  in
+    {
+      derivation = let
+        # The derivation containing the resulting rekeyed secrets
+        rekeyedSecrets = derivationFor hostCfg;
 
-    # Finally, the command that rekeys a given secret.
-    rekeyCommand = secretName: secret: let
-      secretOut = rekeyedSecrets.cachePathFor secret;
-    in ''
-      if [[ -e ${secretOut} ]] && [[ "$FORCE" != true ]]; then
-        echo "[1;90m    Skipping[m [90m[already rekeyed] "${escapeShellArg hostName}":"${escapeShellArg secretName}"[m"
-      else
-        mkdir -p ${rekeyedSecrets.cacheDir}/secrets
-        rm ${secretOut}.tmp &>/dev/null || true
-        echo "[1;32m    Rekeying[m [90m"${escapeShellArg hostName}":[34m"${escapeShellArg secretName}"[m"
-        if ! decrypt ${escapeShellArg secret.rekeyFile} ${escapeShellArg secretName} ${escapeShellArg hostName} \
-          | ${ageHostEncrypt hostCfg} -o ${secretOut}.tmp; then
-          echo "[1;31mFailed to re-encrypt ${secret.rekeyFile} for ${hostName}![m" >&2
+        # The resulting store path for this host's rekeyed secrets
+        outPath = escapeShellArg (outPathFor hostCfg);
+        # The builder which we can use to realise the derivation
+        drvPath = escapeShellArg (drvPathFor hostCfg);
+
+        rekeyCommand = secretName: secret: let
+          secretOut = rekeyedSecrets.cachePathFor secret;
+        in ''
+          if [[ -e ${secretOut} ]] && [[ "$FORCE" != true ]]; then
+            echo "[1;90m    Skipping[m [90m[already rekeyed] "${escapeShellArg hostName}":"${escapeShellArg secretName}"[m"
+          else
+            mkdir -p ${rekeyedSecrets.cacheDir}/secrets
+            rm ${secretOut}.tmp &>/dev/null || true
+            echo "[1;32m    Rekeying[m [90m"${escapeShellArg hostName}":[34m"${escapeShellArg secretName}"[m"
+            if ! decrypt ${escapeShellArg secret.rekeyFile} ${escapeShellArg secretName} ${escapeShellArg hostName} \
+              | ${ageHostEncrypt hostCfg} -o ${secretOut}.tmp; then
+              echo "[1;31mFailed to re-encrypt ${secret.rekeyFile} for ${hostName}![m" >&2
+            else
+              # Make sure to only create the result file if the rekeying was actually successful.
+              # If the first command in the pipe fails, we otherwise create a validly encrypted but empty secret
+              mv ${secretOut}.tmp ${secretOut}
+              any_rekeyed=true
+            fi
+          fi
+        '';
+      in ''
+        ANY_DERIVATION_MODE_HOSTS=true
+        will_delete=false
+        # Remove any existing rekeyed secrets from the nix store if --force was given
+        if [[ -e ${outPath} && ( "$FORCE" == true || ! -e ${outPath}/success ) ]]; then
+          echo "[1;31m     Marking[m [31mexisting store path of [33m"${escapeShellArg hostName}"[31m for deletion [90m("${outPath}")[m"
+          STORE_PATHS_TO_DELETE+=(${outPath})
+          will_delete=true
         fi
-        # Make sure to only create the result file if the rekeying was actually successful.
-        # If the first command in the pipe fails, we otherwise create a validly encrypted but empty secret
-        mv ${secretOut}.tmp ${secretOut}
-        any_rekeyed=true
-      fi
-    '';
-  in ''
-    will_delete=false
-    # Remove any existing rekeyed secrets from the nix store if --force was given
-    if [[ -e ${outPath} && ( "$FORCE" == true || ! -e ${outPath}/success ) ]]; then
-      echo "[1;31m     Marking[m [31mexisting store path of [33m"${escapeShellArg hostName}"[31m for deletion [90m("${outPath}")[m"
-      STORE_PATHS_TO_DELETE+=(${outPath})
-      will_delete=true
-    fi
 
-    any_rekeyed=false
-    # Rekey secrets for ${hostName}
-    ${concatStringsSep "\n" (mapAttrsToList rekeyCommand secretsToRekey)}
+        any_rekeyed=false
+        # Rekey secrets for ${hostName}
+        ${concatStringsSep "\n" (mapAttrsToList rekeyCommand secretsToRekey)}
 
-    # We need to save the rekeyed output when any secret was rekeyed, or when the
-    # output derivation doesn't exist (it could have been removed manually).
-    if [[ "$any_rekeyed" == true || ! -e ${outPath} || "$will_delete" == true ]]; then
-      SANDBOX_PATHS[${rekeyedSecrets.cacheDir}]=1
-      [[ ${rekeyedSecrets.cacheDir} =~ [[:space:]] ]] \
-        && die "The path to the rekeyed secret cannot contain spaces (i.e. neither cacheDir nor name) due to a limitation of nix --extra-sandbox-paths."
-      DRVS_TO_BUILD+=(${drvPath}'^*')
-    fi
-  '';
+        # We need to save the rekeyed output when any secret was rekeyed, or when the
+        # output derivation doesn't exist (it could have been removed manually).
+        if [[ "$any_rekeyed" == true || ! -e ${outPath} || "$will_delete" == true ]]; then
+          SANDBOX_PATHS[${rekeyedSecrets.cacheDir}]=1
+          [[ ${rekeyedSecrets.cacheDir} =~ [[:space:]] ]] \
+            && die "The path to the rekeyed secret cannot contain spaces (i.e. neither cacheDir nor name) due to a limitation of nix --extra-sandbox-paths."
+          DRVS_TO_BUILD+=(${drvPath}'^*')
+        fi
+      '';
+      local = let
+        relativeToFlake = filePath: let
+          fileStr = builtins.unsafeDiscardStringContext (toString filePath);
+        in
+          if hasPrefix userFlakeDir fileStr
+          then "." + removePrefix userFlakeDir fileStr
+          else throw "Cannot determine true origin of ${fileStr} which doesn't seem to be a direct subpath of the flake directory ${userFlakeDir}. Did you make sure to specify `age.rekey.localStorageDir` relative to the root of your flake?";
+
+        hostRekeyDir = relativeToFlake hostCfg.config.age.rekey.localStorageDir;
+        rekeyCommand = secretName: secret: let
+          pubkeyHash = builtins.hashString "sha256" hostCfg.config.age.rekey.hostPubkey;
+          identHash = builtins.substring 0 32 (
+            builtins.hashString "sha256"
+            (pubkeyHash + builtins.hashFile "sha256" secret.rekeyFile)
+          );
+          secretOut = "${hostRekeyDir}/${identHash}-${secret.name}.age";
+        in ''
+          # Mark secret as known
+          TRACKED_SECRETS[${escapeShellArg secretOut}]=true
+
+          if [[ -e ${escapeShellArg secretOut} ]] && [[ "$FORCE" != true ]]; then
+            echo "[1;90m    Skipping[m [90m[already rekeyed] "${escapeShellArg hostName}":"${escapeShellArg secretName}"[m"
+          else
+            SECRET_TMPFILE=$(mktemp --dry-run /tmp/tmp.agenix-rekey.XXXXXXXXXX.age)
+            echo "[1;32m    Rekeying[m [90m"${escapeShellArg hostName}":[34m"${escapeShellArg secretName}"[m"
+            if ! decrypt ${escapeShellArg secret.rekeyFile} ${escapeShellArg secretName} ${escapeShellArg hostName} \
+              | ${ageHostEncrypt hostCfg} -o "$SECRET_TMPFILE"; then
+              echo "[1;31mFailed to re-encrypt ${secret.rekeyFile} for ${hostName}![m" >&2
+              rm "$SECRET_TMPFILE" &>/dev/null || true
+            else
+              # Make sure to only create the result file if the rekeying was actually successful.
+              # If the first command in the pipe fails, we otherwise create a validly encrypted but empty secret
+              mv "$SECRET_TMPFILE" ${escapeShellArg secretOut}
+            fi
+          fi
+        '';
+      in ''
+        # Create a set of tracked secrets so we can remove orphaned files afterwards
+        unset TRACKED_SECRETS
+        declare -A TRACKED_SECRETS
+
+        # Rekey secrets for ${hostName}
+        mkdir -p ${hostRekeyDir}
+        ${concatStringsSep "\n" (mapAttrsToList rekeyCommand secretsToRekey)}
+
+        # Remove orphaned files
+        (
+          REMOVED_ORPHANS=0
+          shopt -s nullglob
+          for f in ${escapeShellArg hostRekeyDir}/*; do
+            if [[ "''${TRACKED_SECRETS["$f"]-false}" == false ]]; then
+              rm -- "$f" || true
+              REMOVED_ORPHANS=$((REMOVED_ORPHANS + 1))
+            fi
+          done
+          if [[ "''${REMOVED_ORPHANS}" -gt 0 ]]; then
+            echo "[1;36m    Removing[m [0;33m''${REMOVED_ORPHANS} [0;36morphaned files for [32m"${escapeShellArg hostName}" [90min ${escapeShellArg hostRekeyDir}[m"
+          fi
+        )
+
+        if [[ "$ADD_TO_GIT" == true ]]; then
+          git add ./${escapeShellArg hostRekeyDir}
+        fi
+      '';
+    }
+    .${hostCfg.config.age.rekey.storageMode};
 in
   pkgs.writeShellScriptBin "agenix-rekey" ''
     set -euo pipefail
@@ -96,37 +181,42 @@ in
       echo ""
       echo 'OPTIONS:'
       echo '-h, --help                Show help'
+      echo '-a, --add-to-git          Add rekeyed secrets to git via git add. (Only used for hosts with storageMode=local)'
       echo '-d, --dummy               Always create dummy secrets when rekeying, which'
       echo '                            can be useful for testing builds in a CI'
       echo '-f, --force               Always rekey everything regardless of whether a'
-      echo '                            matching derivation already exists. If you previously used'
+      echo '                            matching derivation/local file already exists. If you previously used'
       echo '                            dummy values while rekeying you can use this to force rekeying'
       echo '                            even though there are technically no changes to the inputs.'
       echo '                            This will fail if the resulting derivation is currently in'
       echo '                            use by the system (reachable by a GC root).'
       echo '    --show-out-paths      Instead of rekeying, show the output paths of all resulting'
       echo '                            derivations, one path per host. The paths may not yet exist'
-      echo '                            if secrets were not rekeyed recently.'
+      echo '                            if secrets were not rekeyed recently. (Only considers hosts with storageMode=derivation)'
       echo '    --show-drv-paths      Instead of rekeying, show the paths of .drv files used to'
-      echo '                            realise the resulting derivations, one path per host.'
+      echo '                            realise the resulting derivations, one path per host. (Only considers hosts with storageMode=derivation)'
     }
 
     function show_out_paths() {
-      ${concatMapStrings (x: "echo ${escapeShellArg (outPathFor x)}\n") (attrValues nodes)}
+      true # in case list is empty
+      ${concatMapStrings (x: "echo ${escapeShellArg (outPathFor x)}\n") nodesWithDerivationStorage}
     }
 
     function show_drv_paths() {
-      ${concatMapStrings (x: "echo ${escapeShellArg (drvPathFor x)}\n") (attrValues nodes)}
+      true # in case list is empty
+      ${concatMapStrings (x: "echo ${escapeShellArg (drvPathFor x)}\n") nodesWithDerivationStorage}
     }
 
     DUMMY=false
     FORCE=false
+    ADD_TO_GIT=false
     while [[ $# -gt 0 ]]; do
       case "$1" in
         "help"|"--help"|"-help"|"-h")
           show_help
           exit 1
           ;;
+        "-a"|"--add-to-git") ADD_TO_GIT=true ;;
         "-d"|"--dummy") DUMMY=true ;;
         "-f"|"--force") FORCE=true ;;
         "--show-out-paths")
@@ -209,18 +299,21 @@ in
     declare -A SANDBOX_PATHS
     STORE_PATHS_TO_DELETE=()
     DRVS_TO_BUILD=()
+    ANY_DERIVATION_MODE_HOSTS=false
 
     ${concatStringsSep "\n" (mapAttrsToList rekeyCommandsForHost nodes)}
 
-    if [[ "''${#STORE_PATHS_TO_DELETE[@]}" -gt 0 ]]; then
-      echo "[1;31m    Deleting[m [31m''${#STORE_PATHS_TO_DELETE[@]} marked store paths[m"
-      nix store delete "''${STORE_PATHS_TO_DELETE[@]}" 2>/dev/null
-    fi
+    if [[ "$ANY_DERIVATION_MODE_HOSTS" == true ]]; then
+      if [[ "''${#STORE_PATHS_TO_DELETE[@]}" -gt 0 ]]; then
+        echo "[1;31m    Deleting[m [31m''${#STORE_PATHS_TO_DELETE[@]} marked store paths[m"
+        nix store delete "''${STORE_PATHS_TO_DELETE[@]}" 2>/dev/null
+      fi
 
-    if [[ "''${#DRVS_TO_BUILD[@]}" -gt 0 ]]; then
-      echo "[1;32m   Realizing[m [32m''${#DRVS_TO_BUILD[@]} store paths[m"
-      nix build --no-link --extra-sandbox-paths "''${!SANDBOX_PATHS[*]}" --impure "''${DRVS_TO_BUILD[@]}"
-    else
-      echo "Already up to date."
+      if [[ "''${#DRVS_TO_BUILD[@]}" -gt 0 ]]; then
+        echo "[1;32m   Realizing[m [32m''${#DRVS_TO_BUILD[@]} store paths[m"
+        nix build --no-link --extra-sandbox-paths "''${!SANDBOX_PATHS[*]}" --impure "''${DRVS_TO_BUILD[@]}"
+      else
+        echo "Already up to date."
+      fi
     fi
   ''

@@ -8,6 +8,7 @@ nixpkgs: {
   inherit
     (lib)
     all
+    assertMsg
     concatMapStrings
     filter
     flatten
@@ -39,10 +40,35 @@ nixpkgs: {
     if config.age.rekey.forceRekeyOnSystem == null
     then pkgs
     else import nixpkgs {system = config.age.rekey.forceRekeyOnSystem;};
+
   rekeyedSecrets = import ../nix/output-derivation.nix {
     appHostPkgs = rekeyHostPkgs;
     hostConfig = config;
   };
+
+  rekeyedLocalSecret = secret: let
+    pubkeyHash = builtins.hashString "sha256" config.age.rekey.hostPubkey;
+    identHash = builtins.substring 0 32 (
+      builtins.hashString "sha256"
+      (pubkeyHash + builtins.hashFile "sha256" secret.rekeyFile)
+    );
+
+    generateHint =
+      if secret.generator != null
+      then "Did you run `[32magenix generate[m` to generate it and have you added it to git?"
+      else "Have you added it to git?";
+
+    rekeyedPath = config.age.rekey.localStorageDir + "/${identHash}-${secret.name}.age";
+  in
+    assert assertMsg (secret.rekeyFile != null -> builtins.pathExists secret.rekeyFile) ''
+      [1;31mhost ${config.networking.hostName}: age.secrets.${secret.name}.rekeyFile ([33m${toString secret.rekeyFile}[m[1;31m) doesn't exist.[0m ${generateHint}
+    '';
+    assert assertMsg (builtins.pathExists rekeyedPath) ''
+      [1;31mhost ${config.networking.hostName}: Rekeyed secret for age.secrets.${secret.name} not found, please run `[33magenix rekey -a[1;31m` again and make sure to add the results to git.[m
+      [90m  rekeyed secret path: ${toString rekeyedPath}[m
+    '';
+    # Return rekeyed path after checking that both the rekeyFile (original) and rekeyed version exist
+      rekeyedPath;
 
   generatorType = types.submodule (submod: {
     options = {
@@ -259,7 +285,11 @@ in {
         };
         config = {
           # Produce a rekeyed age secret
-          file = mkIf (submod.config.rekeyFile != null) "${rekeyedSecrets}/${submod.config.name}.age";
+          file = mkIf (submod.config.rekeyFile != null) (
+            if config.age.rekey.storageMode == "derivation"
+            then "${rekeyedSecrets}/${submod.config.name}.age"
+            else rekeyedLocalSecret submod.config
+          );
         };
       }));
     };
@@ -299,15 +329,6 @@ in {
     };
 
     rekey = {
-      derivation = mkOption {
-        type = types.package;
-        default = rekeyedSecrets;
-        readOnly = true;
-        description = ''
-          The derivation that contains the rekeyed secrets.
-          Cannot be built directly, use `agenix rekey` instead.
-        '';
-      };
       generatedSecretsDir = mkOption {
         type = types.nullOr types.path;
         default = null;
@@ -317,11 +338,92 @@ in {
           value in this directory, for any secret that defines a generator.
         '';
       };
+
+      storageMode = mkOption {
+        type = types.enum ["derivation" "local"];
+        default = abort ''
+          !!!
+          agenix-rekey now supports storing rekeyed secrets locally instead of as a derivation.
+          You should explicitly specify the desired storage mode for each host!
+
+          Got no time right now? Set this to keep the old behavior:
+
+              age.rekey.storageMode = "derivation";
+
+          If you have just installed agenix-rekey, chose "local" and ignore this message:
+
+              # Choose "local" (new behavior) or "derivation" (old behavior).
+              age.rekey.storageMode = "local";
+              # Choose a directory to store the rekeyed secrets for this host.
+              # This cannot be shared with other hosts.
+              age.rekey.localStorageDir = ./secrets/rekeyed/${config.networking.hostName};
+
+          The new local storage mode is more pure and simpler. It allows building your system without access to the
+          (yubi)key, for example in a CI environment. Depending on your threat-model it might be considered less secure,
+          especially when your repo is public and one your host-keys leaks. Visit the README (https://github.com/oddlama/agenix-rekey)
+          and search check the section on 'Storage Modes' for more information.
+
+          To keep the old behavior, select "derivation". This message will be removed end of 2024 so we can choose an upstream default.
+        '';
+        description = ''
+          You have the choice between two storage modes for your rekeyed secrets, which
+          are fundamentally different from each other. You can freely switch between them at any time.
+
+          Option one is to store the rekeyed secrets locally in your repository (`local`), option two is to
+          transparently store them in a derivation that will be created automatically (`derivation`).
+          If in doubt use `local` which is more flexible and pure, but keep in mind that `derivation`
+          can be more secure for certain cases. It uses more "magic" to hide some details and might be
+          simpler to use if you only build on one host and don't care about remote building / CI.
+          The choice depends on your organizational preferences and threat model.
+
+          **derivation**: Previously this was the default mode. All rekeyed secrets for each host will
+            be collected in a derivation which copies them to the nix store when it is built using `agenix rekey`.
+
+            Pro: The entire process is stateless and rekeyed secrets are never committed to your repository.
+            Con: You cannot easily build your host from a CI/any host that hasn't access to your (yubi)key
+                 except by manually uploading the derivations to the CI after rekeying.
+
+          **local**: All rekeyed secrets will be saved to a local folder in your flake when running `agenix rekey`.
+            Agenix will use these local files directly, without requiring any extra derivations. This is the simpler
+            approach and has less edge-cases.
+
+            Pro: System building stays pure, no need for sandbox shenanigans. -> System can be built without access to the (yubi)key.
+            Con: If your repository is public and one of your hosts is compromised, an attacker may decrypt
+                 any secret that was ever encrypted for that host. This includes secrets that are in the git history.
+        '';
+      };
+
+      localStorageDir = mkOption {
+        type = types.path;
+        example = literalExpression ''./. /* <- flake root */ + "/secrets/rekeyed/myhost" /* separate folder for each host */'';
+        description = ''
+          Only used when `storageMode = "local"`.
+
+          The local storage directory for rekeyed secrets. MUST be a path inside of your repository,
+          and it MUST be constructed by concatenating to the root directory of your flake. Follow
+          the example.
+        '';
+      };
+
+      derivation = mkOption {
+        type = types.package;
+        default = assert assertMsg (config.age.rekey.storageMode == "derivation") ''Accessing the secrets derivation is only possible when `storageMode` is set to `"derivation"`''; rekeyedSecrets;
+        readOnly = true;
+        description = ''
+          Only used when `storageMode = "derivation"`.
+
+          The derivation that contains the rekeyed secrets.
+          Cannot be built directly, use `agenix rekey` instead.
+        '';
+      };
+
       cacheDir = mkOption {
         type = types.str;
         default = "/tmp/agenix-rekey.\"$UID\"";
         example = "/var/tmp/agenix-rekey.\"$UID\"";
         description = ''
+          Only used when `storageMode = "derivation"`.
+
           This is the directory where we store the rekeyed secrets
           so that they can be found later by the derivation builder.
 
@@ -339,9 +441,12 @@ in {
           a deterministic path for each secret.
         '';
       };
+
       forceRekeyOnSystem = mkOption {
         type = types.nullOr types.str;
         description = ''
+          Only used when `storageMode = "derivation"`.
+
           If set, this will force that all secrets are rekeyed on a system of the given architecture.
           This is important if you have several hosts with different architectures, since you usually
           don't want to build the derivation containing the rekeyed secrets on a random remote host.

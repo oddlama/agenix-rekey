@@ -3,7 +3,8 @@
   writeShellScriptBin,
   stdenv,
   allApps,
-}: writeShellScriptBin "agenix" ''
+}:
+writeShellScriptBin "agenix" ''
   set -euo pipefail
 
   function die() { echo "[1;31merror:[m $*" >&2; exit 1; }
@@ -38,6 +39,7 @@
     ${lib.concatStringsSep "|" allApps})
       APP=$1
       shift
+      echo "Collecting information about hosts. This may take a while..."
       exec nix run .#agenix-rekey.apps.${lib.escapeShellArg stdenv.hostPlatform.system}."$APP" -- "$@"
       ;;
 
