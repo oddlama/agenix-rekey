@@ -159,7 +159,7 @@ in
     }
 
     FORCE_GENERATE=false
-    ADD_TO_GIT=false
+    ADD_TO_GIT=''${AGENIX_REKEY_ADD_TO_GIT-false}
     POSITIONAL_ARGS=()
     TAGS=""
     while [[ $# -gt 0 ]]; do

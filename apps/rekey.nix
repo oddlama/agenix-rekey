@@ -209,7 +209,7 @@ in
 
     DUMMY=false
     FORCE=false
-    ADD_TO_GIT=false
+    ADD_TO_GIT=''${AGENIX_REKEY_ADD_TO_GIT-false}
     while [[ $# -gt 0 ]]; do
       case "$1" in
         "help"|"--help"|"-help"|"-h")
