@@ -160,7 +160,7 @@
             fi
           done
           if [[ "''${REMOVED_ORPHANS}" -gt 0 ]]; then
-            echo "[1;36m    Removing[m [0;33m''${REMOVED_ORPHANS} [0;36morphaned files for [32m"${escapeShellArg hostName}" [90min ${escapeShellArg hostRekeyDir}[m"
+            echo "[1;36m     Removed[m [0;33m''${REMOVED_ORPHANS} [0;36morphaned files for [32m"${escapeShellArg hostName}" [90min ${escapeShellArg hostRekeyDir}[m"
           fi
         )
 

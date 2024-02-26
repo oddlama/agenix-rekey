@@ -214,12 +214,44 @@ in
     KNOWN_SECRETS=(
       ${concatStringsSep "\n" (map (x: escapeShellArg x.sourceFile) (attrValues secretsWithContext))}
     )
-    for secret in ''${POSITIONAL_ARGS[@]} ; do
-      for known in ''${KNOWN_SECRETS[@]} ; do
+    for secret in "''${POSITIONAL_ARGS[@]}" ; do
+      for known in "''${KNOWN_SECRETS[@]}" ; do
         [[ "$(realpath -m "$secret")" == "$(realpath -m "$known")" ]] && continue 2
       done
       die "Provided path matches no known secret: $secret"
     done
 
     ${orderedGenerationCommands}
+
+    # Remove orphaned files, first index all known files
+    declare -A KNOWN_SECRETS_SET
+    for known in "''${KNOWN_SECRETS[@]}" ; do
+      # Mark secret as known
+      KNOWN_SECRETS_SET["$known"]=true
+    done
+
+    # Iterate all files in generation directories and delete orphans
+    (
+      REMOVED_ORPHANS=0
+      shopt -s nullglob
+      for f in ${pkgs.lib.concatMapStrings (
+      x:
+        escapeShellArg (relativeToFlake x.config.age.rekey.generatedSecretsDir) + "/* "
+    ) (attrValues nodes)}; do
+        if [[ "''${KNOWN_SECRETS_SET["$f"]-false}" == false ]]; then
+          rm -- "$f" || true
+          REMOVED_ORPHANS=$((REMOVED_ORPHANS + 1))
+        fi
+      done
+      if [[ "''${REMOVED_ORPHANS}" -gt 0 ]]; then
+        echo "[1;36m     Removed[m [0;33m''${REMOVED_ORPHANS} [0;36morphaned files in generation directories[m"
+
+        if [[ "$ADD_TO_GIT" == true ]]; then
+          git add ${pkgs.lib.concatMapStrings (
+      x:
+        escapeShellArg (relativeToFlake x.config.age.rekey.generatedSecretsDir) + " "
+    ) (attrValues nodes)}
+        fi
+      fi
+    )
   ''
