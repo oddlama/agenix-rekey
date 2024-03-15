@@ -58,7 +58,11 @@ nixpkgs: {
       then "Did you run `[32magenix generate[m` to generate it and have you added it to git?"
       else "Have you added it to git?";
 
-    rekeyedPath = config.age.rekey.localStorageDir + "/${identHash}-${secret.name}.age";
+    # Use builtins.path to make sure that we have a standalone copy of the subdirectory in the store.
+    # This is important to ensure that the path only changes if there are acutal changes to this
+    # directory. If we were still using userFlake.outPath + "/secrets/[...]" or something similar,
+    # then the path would change on each subsequent build because the flake path changes.
+    rekeyedPath = builtins.path {path = config.age.rekey.localStorageDir;} + "/${identHash}-${secret.name}.age";
   in
     assert assertMsg (secret.rekeyFile != null -> builtins.pathExists secret.rekeyFile) ''
       [1;31mhost ${config.networking.hostName}: age.secrets.${secret.name}.rekeyFile ([33m${toString secret.rekeyFile}[m[1;31m) doesn't exist.[0m ${generateHint}
@@ -355,8 +359,9 @@ in {
               # Choose "local" (new behavior) or "derivation" (old behavior).
               age.rekey.storageMode = "local";
               # Choose a directory to store the rekeyed secrets for this host.
-              # This cannot be shared with other hosts.
-              age.rekey.localStorageDir = ./secrets/rekeyed/${config.networking.hostName};
+              # This cannot be shared with other hosts. Please refer to this path
+              # from your flake's root directory and not by a direct path literal like ./secrets
+              age.rekey.localStorageDir = ./. + "/secrets/rekeyed/${config.networking.hostName}";
 
           The new local storage mode is more pure and simpler. It allows building your system without access to the
           (yubi)key, for example in a CI environment. Depending on your threat-model it might be considered less secure,

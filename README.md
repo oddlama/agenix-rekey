@@ -139,8 +139,9 @@ to use rekeying is to specify `rekeyFile` instead of `file` on your secrets. The
         #masterIdentities = [ "/home/myuser/master-key.age" ]; # Password protected external master key
         storageMode = "local";
         # Choose a directory to store the rekeyed secrets for this host.
-        # This cannot be shared with other hosts.
-        localStorageDir = ./secrets/rekeyed/${config.networking.hostName};
+        # This cannot be shared with other hosts. Please refer to this path
+        # from your flake's root directory and not by a direct path literal like ./secrets
+        localStorageDir = ./. + "/secrets/rekeyed/${config.networking.hostName}";
       };
     }
     ```
@@ -542,13 +543,15 @@ approach and has less edge-cases.
 
 ## `age.rekey.localStorageDir`
 
-| Type    | `str` |
+| Type    | `path` |
 |-----|-----|
-| Default | `"secrets/rekeyed"` |
+| Example | `./. /* <- flake root */ + "/secrets/rekeyed/myhost" /* separate folder for each host */` |
 
 Only used when `storageMode = "local"`.
 
-The local storage directory for rekeyed secrets, relative to the root directory of your flake.
+The local storage directory for rekeyed secrets. MUST be a path inside of your repository,
+and it MUST be constructed by concatenating to the root directory of your flake. Follow
+the example.
 
 ## `age.rekey.derivation`
 
