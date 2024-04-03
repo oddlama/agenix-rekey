@@ -1,21 +1,24 @@
-name: "Publish a flake to flakestry"
+name: "Publish to flakestry.dev"
 on:
   push:
     branches:
       - main
-  workflow_dispatch:
-    inputs:
-      ref:
-        description: "The existing reference to publish"
-        type: "string"
-        required: true
+
 jobs:
-  publish-flake:
+  flakestry-publish:
     runs-on: ubuntu-latest
     permissions:
       id-token: "write"
       contents: "read"
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Retrieve commit count
+        run: echo "COMMITS=$(git rev-list --count main)" >> $GITHUB_ENV
       - uses: flakestry/flakestry-publish@main
         with:
-          ref: "${{ inputs.ref || github.ref }}"
+          version: "v0.1.${{ env.COMMITS }}"
