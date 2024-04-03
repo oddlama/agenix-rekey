@@ -65,10 +65,10 @@ nixpkgs: {
     rekeyedPath = builtins.path {path = config.age.rekey.localStorageDir;} + "/${identHash}-${secret.name}.age";
   in
     assert assertMsg (secret.rekeyFile != null -> builtins.pathExists secret.rekeyFile) ''
-      [1;31mhost ${config.networking.hostName}: age.secrets.${secret.name}.rekeyFile ([33m${toString secret.rekeyFile}[m[1;31m) doesn't exist.[0m ${generateHint}
+      [1;31mhost ${config.networking.hostName}: age.secrets.${secret.id}.rekeyFile ([33m${toString secret.rekeyFile}[m[1;31m) doesn't exist.[0m ${generateHint}
     '';
     assert assertMsg (builtins.pathExists rekeyedPath) ''
-      [1;31mhost ${config.networking.hostName}: Rekeyed secret for age.secrets.${secret.name} not found, please run `[33magenix rekey -a[1;31m` again and make sure to add the results to git.[m
+      [1;31mhost ${config.networking.hostName}: Rekeyed secret for age.secrets.${secret.id} not found, please run `[33magenix rekey -a[1;31m` again and make sure to add the results to git.[m
       [90m  rekeyed secret path: ${toString rekeyedPath}[m
     '';
     # Return rekeyed path after checking that both the rekeyFile (original) and rekeyed version exist
