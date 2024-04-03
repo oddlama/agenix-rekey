@@ -292,7 +292,7 @@ in {
           file = mkIf (submod.config.rekeyFile != null) (
             if config.age.rekey.storageMode == "derivation"
             then "${rekeyedSecrets}/${submod.config.name}.age"
-            else rekeyedLocalSecret submod.config
+            else rekeyedLocalSecret config.age.secrets.${submod.config.id}
           );
         };
       }));
