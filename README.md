@@ -229,6 +229,21 @@ the example below would generate a random 6 word passphrase using the
 }
 ```
 
+### Pre-defined generators
+
+- `alnum` - Generates a long (48 character) alphanumeric password.
+- `base64` - Generates a long (32 character) base64 encoded password.
+- `hex` - Generates a long (24 character) hexadecimal encoded password.
+- `passphrase` - Generates a six word, space separated passphrase.
+- `dhparams` - Generates Diffie–Hellman parameters which can be used for
+  perfect forward security.  See
+  [Diffie-Hellman_parameters](https://wiki.openssl.org/index.php/Diffie-Hellman_parameters)
+  for details.
+- `ssh-ed25519` - Generates a [ED-25519](https://en.wikipedia.org/wiki/EdDSA)
+  SSH key pair using the current hostname.
+
+### Custom generators
+
 You can also define your own generators, either by creating an entry in `age.generators`
 to make a reusable generator like `"passphrase"` above, or directly by setting
 `age.secrets.<name>.generator` to a generator definition.
