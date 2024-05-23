@@ -380,6 +380,23 @@ in
               };
               description = "If defined, this generator will be used to bootstrap this secret's when it doesn't exist.";
             };
+            settings = mkOption {
+              type = types.nullOr types.attrs;
+              default = null;
+              description = "Settings to provide to a specific secret.";
+              example = literalExpression ''
+                {
+                  validity = 365;
+                  subject = {
+                    country = "Gondor";
+                    state = "";
+                    location = "Minas Tirith";
+                    organization = "Rangers of Ithilien";
+                    organization-unit = "Rangers of Ithilien";
+                  };
+                }
+              '';
+            };
           };
           config = {
             # Produce a rekeyed age secret
