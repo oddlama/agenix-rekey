@@ -56,7 +56,9 @@
   # If the path already exists, this makes sure that the definition is the same.
   addGeneratedSecretChecked = host: set: secretName: let
     secret = nodes.${host}.config.age.secrets.${secretName};
-    sourceFile = relativeToFlake secret.rekeyFile;
+    sourceFile = assert assertMsg (secret.rekeyFile != null)
+    "age.secrets.${secretName}: `rekeyFile` must be set when using a generator.";
+      relativeToFlake secret.rekeyFile;
     script = secret.generator._script {
       inherit secret pkgs;
       inherit (pkgs) lib;
