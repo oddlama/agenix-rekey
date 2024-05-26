@@ -141,6 +141,12 @@
       (map (x: relativeToFlake x.rekeyFile) contextSecret.secret.generator.dependencies));
   in
     stringsWithDeps.textClosureMap (x: x) stages (attrNames stages);
+
+  # It only makes sense to clean up directories of generated secrets
+  # for the nodes that have a dedicated generatedSecretsDir set.
+  nodesWithGeneratedSecretsDir =
+    filter (x: x.config.age.rekey.generatedSecretsDir != null)
+    (attrValues nodes);
 in
   pkgs.writeShellScriptBin "agenix-generate" ''
     set -euo pipefail
@@ -234,10 +240,9 @@ in
     (
       REMOVED_ORPHANS=0
       shopt -s nullglob
-      for f in ${pkgs.lib.concatMapStrings (
-      x:
-        escapeShellArg (relativeToFlake x.config.age.rekey.generatedSecretsDir) + "/* "
-    ) (attrValues nodes)}; do
+      for f in ${pkgs.lib.concatMapStringsSep " "
+      (x: escapeShellArg (relativeToFlake x.config.age.rekey.generatedSecretsDir) + "/*")
+      nodesWithGeneratedSecretsDir}; do
         if [[ "''${KNOWN_SECRETS_SET["$f"]-false}" == false ]]; then
           rm -- "$f" || true
           REMOVED_ORPHANS=$((REMOVED_ORPHANS + 1))
@@ -247,10 +252,9 @@ in
         echo "[1;36m     Removed[m [0;33m''${REMOVED_ORPHANS} [0;36morphaned files in generation directories[m"
 
         if [[ "$ADD_TO_GIT" == true ]]; then
-          git add ${pkgs.lib.concatMapStrings (
-      x:
-        escapeShellArg (relativeToFlake x.config.age.rekey.generatedSecretsDir) + " "
-    ) (attrValues nodes)}
+          git add ${pkgs.lib.concatMapStringsSep " "
+      (x: escapeShellArg (relativeToFlake x.config.age.rekey.generatedSecretsDir))
+      nodesWithGeneratedSecretsDir}
         fi
       fi
     )
