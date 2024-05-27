@@ -57,7 +57,7 @@
   addGeneratedSecretChecked = host: set: secretName: let
     secret = nodes.${host}.config.age.secrets.${secretName};
     sourceFile = assert assertMsg (secret.rekeyFile != null)
-    "age.secrets.${secretName}: `rekeyFile` must be set when using a generator.";
+    "Host ${host}: age.secrets.${secretName}: `rekeyFile` must be set when using a generator.";
       relativeToFlake secret.rekeyFile;
     script = secret.generator._script {
       inherit secret pkgs;
