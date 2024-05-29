@@ -27,8 +27,13 @@
     allApps = ["edit" "generate" "rekey"];
   in
     {
-      nixosModules.agenixRekey = import ./modules/agenix-rekey.nix nixpkgs;
-      nixosModules.default = self.nixosModules.agenixRekey;
+      flakeModule = ./flake-module.nix;
+
+      nixosModules = {
+        agenix-rekey = import ./modules/agenix-rekey.nix nixpkgs;
+        agenixRekey = self.nixosModules.agenix-rekey; # backward compat
+        default = self.nixosModules.agenix-rekey;
+      };
 
       # A nixpkgs overlay that adds the agenix CLI wrapper
       overlays.default = self.overlays.agenix-rekey;
@@ -69,7 +74,7 @@
           be removed late 2024. The new approach will unclutter your flake's app definitions
           and provide a hermetic entrypoint for agenix-rekey, which can be accessed more
           egonomically via a new CLI wrapper 'agenix'. Alternatively you can still run
-          the scripts directly from your flake using `nix run .#agenix-rekey.apps.$system.<app>`,
+          the scripts directly from your flake using `nix run .#agenix-rekey.$system.<app>`,
           in case you don't want to use the wrapper.
 
           Please remove your current `agenix-rekey.defineApps` call entirely from your apps

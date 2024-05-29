@@ -48,7 +48,7 @@ writeShellScriptBin "agenix" ''
       APP=$1
       shift
       echo "Collecting information about hosts. This may take a while..."
-      exec nix run .#agenix-rekey.apps.${lib.escapeShellArg stdenv.hostPlatform.system}."$APP" -- "$@"
+      exec nix run .#agenix-rekey.${lib.escapeShellArg stdenv.hostPlatform.system}."$APP" -- "$@"
       ;;
 
     *) die "Unknown command: $1" ;;
