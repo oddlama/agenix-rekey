@@ -57,13 +57,14 @@
         # pkgs.age and pkgs.rage.
         agePackage ? (p: p.rage),
       }:
-        flake-utils.lib.eachDefaultSystem (system: {
+        (flake-utils.lib.eachDefaultSystem (system: {
           apps = pkgs.${system}.lib.genAttrs allApps (app:
             import ./apps/${app}.nix {
               inherit nodes userFlake agePackage;
               pkgs = pkgs.${system};
             });
-        });
+        }))
+        .apps;
 
       # XXX: deprecated, scheduled for removal in late 2024. Use the package instead of
       # defining apps. This is just a compatibility wrapper that defines apps with
