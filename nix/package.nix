@@ -80,6 +80,6 @@ writeShellScriptBin "agenix" ''
   fi
   echo "Collecting information about hosts. This may take a while..."
   exec nix run $SHOW_TRACE_ARG \
-    .#agenix-rekey.apps.${lib.escapeShellArg stdenv.hostPlatform.system}."$APP" \
+    .#agenix-rekey.${lib.escapeShellArg stdenv.hostPlatform.system}."$APP" \
      -- "''${PASS_THRU_ARGS[@]}"
 ''

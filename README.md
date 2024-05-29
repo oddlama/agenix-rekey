@@ -50,13 +50,14 @@ run `agenix rekey` whenever it is necessary (the build will fail and tell you).
 
 To use agenix-rekey, you will have to add agenix-rekey to your `flake.nix`,
 import the provided NixOS module in your hosts and expose some information
-in your flake so agenix-rekey knows where to look for secrets.
+in your flake so agenix-rekey knows where to look for secrets. A [flake-parts](https://flake.parts)
+module is also available (see end of this section for an example).
 
 To get the `agenix` command, you can either use `nix shell github:oddlama/agenix-rekey`
 to enter a shell where it is available temporarily, or alternatively add
-the provided package `agenix-rekey.packages.${system}.default` to your devshell (see below).
+the provided package `agenix-rekey.packages.${system}.default` to your devshell as shown below.
 
-You can also directly call the scripts through your flake with `nix run .#agenix-rekey.apps.<system>.<app>`
+You can also directly call the scripts through your flake with `nix run .#agenix-rekey.<system>.<app>`
 if you don't want to use the wrapper, which may be useful for use in your own scripts.
 
 ```nix
@@ -68,7 +69,6 @@ if you don't want to use the wrapper, which may be useful for use in your own sc
   # otherwise derivation paths can mismatch (when using storageMode = "derivation"),
   # resulting in the rekeyed secrets not being found!
   inputs.agenix-rekey.inputs.nixpkgs.follows = "nixpkgs";
-  # also works with inputs.ragenix.url = ...;
   # ...
 
   outputs = { self, nixpkgs, agenix, agenix-rekey }: {
@@ -109,6 +109,47 @@ if you don't want to use the wrapper, which may be useful for use in your own sc
   });
 }
 ```
+
+<details>
+<summary>
+Usage with flake-parts
+</summary>
+
+```nix
+{
+  inputs.flake-parts.url = "github:hercules-ci/flake-parts";
+
+  inputs.agenix.url = "github:ryantm/agenix";
+  inputs.agenix-rekey.url = "github:oddlama/agenix-rekey";
+  # Make sure to override the nixpkgs version to follow your flake,
+  # otherwise derivation paths can mismatch (when using storageMode = "derivation"),
+  # resulting in the rekeyed secrets not being found!
+  inputs.agenix-rekey.inputs.nixpkgs.follows = "nixpkgs";
+  # ...
+
+  outputs = inputs:
+    inputs.flake-parts.lib.mkFlake {inherit inputs;} {
+      imports = [
+        inputs.agenix-rekey.flakeModule
+      ];
+
+      perSystem = {config, pkgs, ...}: {
+        # Add `config.agenix-rekey.package` to your devshell to
+        # easily access the `agenix` command wrapper.
+        devShells.default = pkgs.mkShell {
+          nativeBuildInputs = [ config.agenix-rekey.package ];
+        };
+
+        # You can define agenix-rekey.nodes if you want to change which
+        # hosts # are considered for rekeying.
+        # Refer to the flake.parts section on agenix-rekey to see all available options.
+        agenix-rekey.nodes = inputs.self.nixosConfigurations; # (not technically needed, as it is already the default)
+      };
+    };
+}
+```
+
+</details>
 
 You have the choice between two storage modes for your rekeyed secrets, which
 are fundamentally different from each other. You can freely switch between them,
@@ -268,7 +309,6 @@ can use to define our generation script.
 | `decrypt` | The base rage command that can decrypt secrets to stdout by using the defined `masterIdentities`.
 | `...`     | For future/unused arguments
 
-
 First let's have a look at defining a very simple generator that creates longer passphrases.
 Notice how we use the passed `pkgs` set instead of the package set from the config.
 
@@ -339,7 +379,8 @@ which are also generated automatically:
 ## Using age instead of rage
 
 If you don't want to use rage for some reason, you can specify a compatible
-alternative tool in your top-level configure call:
+alternative tool in your top-level configure call (or via an option if you are using
+flake-parts):
 
 ```nix
 agenix-rekey = agenix-rekey.configure {
