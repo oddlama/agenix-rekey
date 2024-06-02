@@ -26,6 +26,8 @@
   mergedExtraEncryptionPubkeys = mergeArray (x: x.config.age.rekey.extraEncryptionPubkeys or []);
   mergedSecrets = mergeArray (x: filter (y: y != null) (mapAttrsToList (_: s: s.rekeyFile) x.config.age.secrets));
 
+  masterIdentityPaths = map (x: x.identity) mergedMasterIdentities;
+
   isAbsolutePath = x: substring 0 1 x == "/";
   pubkeyOpt = x:
     if isAbsolutePath x
@@ -36,7 +38,7 @@
   # Collect all paths to enabled age plugins
   envPath = ''PATH="$PATH"${concatMapStrings (x: ":${escapeShellArg x}/bin") mergedAgePlugins}'';
   # The identities which can decrypt secrets need to be passed to age
-  masterIdentityArgs = concatMapStrings (x: "-i ${escapeShellArg x} ") mergedMasterIdentities;
+  masterIdentityArgs = concatMapStrings (x: "-i ${escapeShellArg x} ") masterIdentityPaths;
   # Extra recipients for master encrypted secrets
   extraEncryptionPubkeys = concatStringsSep " " (map pubkeyOpt mergedExtraEncryptionPubkeys);
 in {

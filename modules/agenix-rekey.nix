@@ -16,6 +16,7 @@ nixpkgs: {
     hasAttr
     hasPrefix
     hasSuffix
+    isAttrs
     isPath
     isString
     literalExpression
@@ -161,6 +162,8 @@ nixpkgs: {
       };
     };
   });
+
+  masterIdentityPaths = map (x: x.identity) config.age.rekey.masterIdentities;
 in {
   config = {
     assertions =
@@ -170,8 +173,8 @@ in {
           message = "rekey.masterIdentities must be set.";
         }
         {
-          assertion = all isAbsolutePath config.age.rekey.masterIdentities;
-          message = "All masterIdentities must be referred to by an absolute path, but (${filter isAbsolutePath config.age.rekey.masterIdentities}) is not.";
+          assertion = all isAbsolutePath masterIdentityPaths;
+          message = "All masterIdentities must be referred to by an absolute path, but (${filter isAbsolutePath masterIdentityPaths}) is not.";
         }
       ]
       ++ flatten (flip mapAttrsToList config.age.secrets
@@ -189,9 +192,9 @@ in {
     warnings = let
       hasGoodSuffix = x: (hasPrefix builtins.storeDir x) -> (hasSuffix ".age" x || hasSuffix ".pub" x);
     in
-      optional (!all hasGoodSuffix config.age.rekey.masterIdentities) ''
+      optional (!all hasGoodSuffix masterIdentityPaths) ''
         At least one of your rekey.masterIdentities references an unencrypted age identity in your nix store!
-        ${concatMapStrings (x: "  - ${x}\n") (filter hasGoodSuffix config.age.rekey.masterIdentities)}
+        ${concatMapStrings (x: "  - ${x}\n") (filter hasGoodSuffix masterIdentityPaths)}
 
         These files have already been copied to the nix store, and are now publicly readable!
         Please make sure they don't contain any secret information or delete them now.
@@ -505,7 +508,39 @@ in {
         #example = "/etc/ssh/ssh_host_ed25519_key.pub";
       };
       masterIdentities = mkOption {
-        type = with types; listOf (coercedTo path toString str);
+        type = with types; let
+          identityPathType = coercedTo path toString str;
+        in
+          listOf (
+            # By coercing the old identityPathType into a canonical submodule of the form
+            # ```
+            # {
+            #   identity = <identityPath>;
+            #   pubkey = ...;
+            # }
+            # ```
+            # we don't have to worry about it at a later stage.
+            coercedTo
+            identityPathType
+            (p:
+              if isAttrs p
+              then p
+              else {identity = p;})
+            (submodule {
+              options = {
+                identity = mkOption {type = identityPathType;};
+                pubkey = mkOption {
+                  type = nullOr (coercedTo path (x:
+                    if isPath x
+                    then readFile x
+                    else x)
+                  str);
+                  default = null;
+                };
+              };
+            })
+          );
+        # TODO: documentation
         description = ''
           The list of age identities that will be presented to `rage` when decrypting the stored secrets
           to rekey them for your host(s). If multiple identities are given, they will be tried in-order.
@@ -525,7 +560,13 @@ in {
           are password protected.
         '';
         default = [];
-        example = [./secrets/my-public-yubikey-identity.txt];
+        example = [
+          ./secrets/my-public-yubikey-identity.txt
+          {
+            identity = ./secrets/my-other-public-identity.txt;
+            pubkey = "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3290gq";
+          }
+        ];
       };
       extraEncryptionPubkeys = mkOption {
         type = with types; listOf (coercedTo path toString str);
