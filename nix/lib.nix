@@ -120,17 +120,17 @@
         done
         if [[ "$pubkey_found" == false ]]; then
           warn "Environment variable AGENIX_REKEY_PRIMARY_IDENTITY is set, but matches none of the pubkeys found by agenix-rekey."
-          warn "Please check that your pubkeys and identities are set up correctly."
+          warn "Please verify that your pubkeys and identities are set up correctly."
           warn "Value of AGENIX_REKEY_PRIMARY_IDENTITY: \"$AGENIX_REKEY_PRIMARY_IDENTITY\""
           warn "Pubkeys found:"
           for pubkey in "''${!masterIdentityMap[@]}"; do
-            warn "  $pubkey in file \"''${masterIdentityMap["$pubkey"]}\""
+            warn "  $pubkey for file \"''${masterIdentityMap["$pubkey"]}\""
           done
         fi
       fi
 
       # Use first argument to determine encryption mode.
-      # Pass all other arguments to (r)age
+      # Pass all other arguments to (r)age.
       if [[ "$1" == "encrypt" ]]; then
         ${envPath} ${ageProgram} -e "''${masterIdentityArgs[@]}" ${extraEncryptionPubkeyArgs} "''${@:2}"
       else
