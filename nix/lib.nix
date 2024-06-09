@@ -67,6 +67,7 @@
       # For master identies with no explicit pubkey, try extracting a pubkey from the file first.
       # Collect final identity arguments for encryption in an array.
       masterIdentityArgs=()
+      # shellcheck disable=SC2041
       for file in ${
         concatStringsSep " "
         (map
