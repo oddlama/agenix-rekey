@@ -83,20 +83,27 @@
           if grep -q "^AGE-PLUGIN-YUBIKEY-" "$file"; then
             # If the file specifies "Recipient: age1yubikey1<pubkey>", extract recipient and specify with "-r".
             if mapfile -t pubkeys < <(grep 'Recipient: age1yubikey1' "$file" | grep -Eoh 'age1yubikey1[0-9a-z]+'); then
-              if [[ ''${#pubkeys[@]} -gt 1 ]]; then
-                error "Found more than one public key in file: \"$file\"."
+              if [[ ''${#pubkeys[@]} -eq 0 ]]; then
+                error "Failed to find public key for master identity: $file"
+                error "If this is a keygrab, a comment should have been added by age-plugin-yubikey that seems to be missing here"
+                error "Please re-export the identity from age-plugin-yubikey or manually add the \"# Recipient: age1yubikey1<your_pubkey>\""
+                error "string in front of the key."
+                error "Alternatively, you can also specify the correct public key in \`config.age.rekey.masterIdentities\`."
+                exit 1
+              elif [[ ''${#pubkeys[@]} -eq 1 ]]; then
+                masterIdentityMap["''${pubkeys[0]}"]="$file"
+                masterIdentityArgs+=("-r" "''${pubkeys[0]}")
+                file_processed=true
+              else
+                error "Found more than one public key in master identity: $file"
                 error "agenix-rekey only supports a one-to-one correspondence between identities and their pubkeys."
-                error "If this is not intended, please avoid the \"Recipient: \" string in front of the incorrect key."
-                error "Alternatively, set the correct public key in config.age.rekey.masterIdentities."
+                error "If this is not intended, please avoid the \"# Recipient: \" comment in front of the incorrect key."
+                error "Alternatively, specify the correct public key in \`config.age.rekey.masterIdentities\`."
                 error "List of public keys found in the file:"
                 for pubkey in "''${pubkeys[@]}"; do
                   error "  $pubkey"
                 done
                 exit 1
-              else
-                masterIdentityMap["''${pubkeys[0]}"]="$file"
-                masterIdentityArgs+=("-r" "''${pubkeys[0]}")
-                file_processed=true
               fi
             fi
           fi
