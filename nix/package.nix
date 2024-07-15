@@ -50,8 +50,13 @@ writeShellScriptBin "agenix" ''
   while [[ $# -gt 0 ]]; do
     case "$1" in
       "help"|"--help"|"-help"|"-h")
-        show_help
-        exit 1
+        if [[ "$APP" == "" ]]; then
+          show_help
+          exit 1
+        else
+          PASS_THRU_ARGS+=("$1")
+          shift
+        fi
         ;;
       "--show-trace")
         # It is potentially desirable to use --show-trace in the subcommand as
@@ -76,7 +81,8 @@ writeShellScriptBin "agenix" ''
     esac
   done
   if [[ "$APP" == "" ]]; then
-    die "Error: No app provided.  Exiting."
+    show_help
+    exit 1
   fi
   echo "Collecting information about hosts. This may take a while..."
   exec nix run $SHOW_TRACE_ARG \
