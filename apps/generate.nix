@@ -248,16 +248,13 @@ in
         if [[ "''${KNOWN_SECRETS_SET["$f"]-false}" == false ]]; then
           rm -- "$f" || true
           REMOVED_ORPHANS=$((REMOVED_ORPHANS + 1))
+          if [[ "$ADD_TO_GIT" == true ]]; then
+            git add $f
+          fi
         fi
       done
       if [[ "''${REMOVED_ORPHANS}" -gt 0 ]]; then
         echo "[1;36m     Removed[m [0;33m''${REMOVED_ORPHANS} [0;36morphaned files in generation directories[m"
-
-        if [[ "$ADD_TO_GIT" == true ]]; then
-          git add ${pkgs.lib.concatMapStringsSep " "
-      (x: escapeShellArg (relativeToFlake x.config.age.rekey.generatedSecretsDir))
-      nodesWithGeneratedSecretsDir}
-        fi
       fi
     )
   ''
