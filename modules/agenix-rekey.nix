@@ -200,7 +200,7 @@ in {
         Please make sure they don't contain any secret information or delete them now.
 
         To silence this warning, you may:
-          - Use a split-identity ending in `.pub`, where the private part is not contained (a yubikey identity)
+          - Use a split-identity ending in `.pub` or `.hmac`, where the private part is not contained (a yubikey identity)
           - Use an absolute path to your key outside of the nix store ("/home/myuser/age-master-key")
           - Or encrypt your age identity and use the extension `.age`. You can encrypt an age identity
             using `rage -p -o privkey.age privkey` which protects it in your store.
