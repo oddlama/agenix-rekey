@@ -190,7 +190,7 @@ in {
         ]));
 
     warnings = let
-      hasGoodSuffix = x: (hasPrefix builtins.storeDir x) -> (hasSuffix ".age" x || hasSuffix ".pub" x);
+      hasGoodSuffix = x: (hasPrefix builtins.storeDir x) -> (hasSuffix ".age" x || hasSuffix ".pub" x || hasSuffix ".hmac" x);
     in
       optional (!all hasGoodSuffix masterIdentityPaths) ''
         At least one of your rekey.masterIdentities references an unencrypted age identity in your nix store!
