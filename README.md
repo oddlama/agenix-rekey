@@ -8,11 +8,11 @@ It also allows you to define versatile generators for secrets, so they can be bo
 automatically. This extension is a flakes-only project and can be used alongside regular use of agenix.
 
 To make use of rekeying, you will have to store secrets in your repository by encrypting
-them with a master key (YubiKey or regular age identity), and agenix-rekey will automatically
-re-encrypt these secrets for any host that requires them. A YubiKey is highly recommended
+them with a master key (YubiKey, FIDO2 key, TPM or regular age identity), and agenix-rekey will automatically
+re-encrypt these secrets for any host that requires them. A YubiKey/FIDO2 key is highly recommended
 and will provide you with a smooth rekeying experience. In summary, you get:
 
-- 🔑 **Single master-key.** Anything in your repository is encrypted by your master YubiKey or age identity.
+- 🔑 **Single master-key.** Anything in your repository is encrypted by your master YubiKey/FIDO2 key or age identity.
 - ➡️ **Host-key inference.** No need to manually keep track of which key is needed for which host - no `secrets.nix`.
 - ✔️ **Less secret management.** Rekeyed secrets never have to be added to your flake repository, thus
   you only have to keep track of the actual secret. Also a leaked host-key doesn't allow an attacker to decrypt
@@ -258,6 +258,17 @@ to use rekeying is to specify `rekeyFile` instead of `file` on your secrets. The
     > to your remote systems will work automatically, so no additional care has to be taken.
     > Only when you strictly build on your remotes, you might have to copy those secrets manually.
     > You can target them by using `agenix rekey --show-out-paths` or by directly referring to `nixosConfigurations.<host>.config.age.rekey.derivation`
+
+## Using a FIDO2 key instead of a YubiKey
+
+This agenix extension also works with FIDO2 keys instead of yubikeys, but you will need
+to adjust your setup a little (thanks to @Arbel-arad for pointing this out):
+
+- First you require a FIDO2 key that supports the `hmac-secret` extension, which you can check by running `fido2-token -I`
+- Add the necessary plugin by setting `age.rekey.agePlugins = [pkgs.age-plugin-fido2-hmac];`
+- Run `age-plugin-fido2-hmac -g` to generate credentials on your FIDO2 key
+- If it asks whether you want a separate identity file, pick yes. It will print the recipient address and keygrip.
+- Specify the keygrip identity file and provide the public key to agenix-rekey: `age.rekey.masterIdentities = [{ identity = ./mykey.hmac; pubkey = "age123456..."; }];`
 
 ## Secret generation
 
