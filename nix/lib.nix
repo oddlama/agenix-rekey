@@ -67,13 +67,14 @@
       # For master identies with no explicit pubkey, try extracting a pubkey from the file first.
       # Collect final identity arguments for encryption in an array.
       masterIdentityArgs=()
-      # shellcheck disable=SC2041
-      for file in ${
+      masterIdentityArray=(${
         concatStringsSep " "
         (map
-          (x: "${escapeShellArg x.identity}")
+          (x: ''"${escapeShellArg x.identity}"'')
           (filter (x: x.pubkey == null) mergedMasterIdentities))
-      }; do
+      })
+      # shellcheck disable=SC2041
+      for file in "''${masterIdentityArray[@]}"; do
         # Keep track if a file was processed.
         file_processed=false
 
