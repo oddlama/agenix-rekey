@@ -243,7 +243,7 @@ in
       REMOVED_ORPHANS=0
       shopt -s nullglob
       for f in ${pkgs.lib.concatMapStringsSep " "
-      (x: escapeShellArg (relativeToFlake x.config.age.rekey.generatedSecretsDir) + "/*")
+      (x: escapeShellArg (relativeToFlake x.config.age.rekey.generatedSecretsDir) + "/*.age")
       nodesWithGeneratedSecretsDir}; do
         if [[ "''${KNOWN_SECRETS_SET["$f"]-false}" == false ]]; then
           rm -- "$f" || true
