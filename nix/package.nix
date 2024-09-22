@@ -76,7 +76,7 @@ writeShellScriptBin "agenix" ''
         ;;
       "--extra-flake-params")
         if [[ "$APP" == "" ]]; then
-          FLAKE_PARAMS="$1"
+          FLAKE_PARAMS="$2"
         fi
         shift
         ;;
