@@ -79,6 +79,7 @@ writeShellScriptBin "agenix" ''
           FLAKE_PARAMS="$2"
         fi
         shift
+        shift
         ;;
       ${lib.concatStringsSep "|" allApps})
         APP="$1"
