@@ -77,9 +77,11 @@ writeShellScriptBin "agenix" ''
       "--extra-flake-params")
         if [[ "$APP" == "" ]]; then
           FLAKE_PARAMS="$2"
+          shift
+          shift
+        else
+          die "--extra-flake-params must be specified before the command name"
         fi
-        shift
-        shift
         ;;
       ${lib.concatStringsSep "|" allApps})
         APP="$1"
