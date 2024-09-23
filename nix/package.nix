@@ -21,6 +21,9 @@ writeShellScriptBin "agenix" ''
     echo 'OPTIONS:'
     echo '  --show-trace            Show the trace for agenix-rekey.  This must be provided before the'
     echo '                            subcommand or it will be provided to the subcommand.'
+    echo '  --extra-flake-params    Extra flake parameters to pass to the "nix run" invocation, such as'
+    echo '                            "\?submodules=1" to enable submodule support.'
+
   }
 
   USER_GIT_TOPLEVEL=$(realpath -e "$(git rev-parse --show-toplevel 2>/dev/null || pwd)") \
@@ -44,6 +47,7 @@ writeShellScriptBin "agenix" ''
 
   APP=""
   SHOW_TRACE_ARG=""
+  FLAKE_PARAMS=""
   # Various Bash versions treat empty arrays as unset, which then trigger
   # unbound variable errors.
   PASS_THRU_ARGS=()
@@ -70,6 +74,15 @@ writeShellScriptBin "agenix" ''
         fi
         shift
         ;;
+      "--extra-flake-params")
+        if [[ "$APP" == "" ]]; then
+          FLAKE_PARAMS="$2"
+          shift
+          shift
+        else
+          die "--extra-flake-params must be specified before the command name"
+        fi
+        ;;
       ${lib.concatStringsSep "|" allApps})
         APP="$1"
         shift
@@ -86,6 +99,6 @@ writeShellScriptBin "agenix" ''
   fi
   echo "Collecting information about hosts. This may take a while..."
   exec nix run $SHOW_TRACE_ARG \
-    .#agenix-rekey.${lib.escapeShellArg stdenv.hostPlatform.system}."$APP" \
+    ."$FLAKE_PARAMS"#agenix-rekey.${lib.escapeShellArg stdenv.hostPlatform.system}."$APP" \
      -- "''${PASS_THRU_ARGS[@]}"
 ''
