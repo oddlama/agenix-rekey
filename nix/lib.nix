@@ -143,7 +143,11 @@
         ${envPath} ${ageProgram} -e "''${masterIdentityArgs[@]}" ${extraEncryptionPubkeyArgs} "''${@:2}"
       else
         # Prepend primary key argument before all others to it gets the first attempt at decrypting.
-        ${envPath} ${ageProgram} -d "''${primaryIdentityArgs[@]}" ${decryptionMasterIdentityArgs} "''${@:2}"
+        if [[ -n "''${AGENIX_REKEY_PRIMARY_IDENTITY:-}" ]] && [[ "''${AGENIX_REKEY_PRIMARY_IDENTITY_ONLY:-}" == true ]]; then
+          ${envPath} ${ageProgram} -d "''${primaryIdentityArgs[@]}" "''${@:2}"
+        else
+          ${envPath} ${ageProgram} -d "''${primaryIdentityArgs[@]}" ${decryptionMasterIdentityArgs} "''${@:2}"
+        fi
       fi
     '';
   };

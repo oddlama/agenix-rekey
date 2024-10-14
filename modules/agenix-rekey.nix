@@ -1,6 +1,5 @@
 nixpkgs: {
   lib,
-  options,
   config,
   pkgs,
   ...
@@ -260,6 +259,15 @@ in {
             default = submod.config._module.args.name;
             readOnly = true;
             description = "The true identifier of this secret as used in `age.secrets`.";
+          };
+
+          intermediary = {
+            type = types.bool;
+            default = false;
+            description = ''
+              Whether the secret is only required as an intermediary/repository
+              secret and should not be uploaded and decrypted on the host.
+            '';
           };
 
           rekeyFile = mkOption {
