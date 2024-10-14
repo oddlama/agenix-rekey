@@ -67,7 +67,6 @@
           if [[ -e ${secretOut} ]] && [[ "$FORCE" != true ]]; then
             echo "[1;90m    Skipping[m [90m[already rekeyed] "${escapeShellArg hostName}":"${escapeShellArg secretName}"[m"
           else
-            mkdir -p ${rekeyedSecrets.cacheDir}/secrets
             rm ${secretOut}.tmp &>/dev/null || true
             echo "[1;32m    Rekeying[m [90m"${escapeShellArg hostName}":[34m"${escapeShellArg secretName}"[m"
             if ! decrypt ${escapeShellArg secret.rekeyFile} ${escapeShellArg secretName} ${escapeShellArg hostName} \
@@ -93,6 +92,7 @@
 
         any_rekeyed=false
         # Rekey secrets for ${hostName}
+        mkdir -p ${rekeyedSecrets.cacheDir}/secrets
         ${concatStringsSep "\n" (mapAttrsToList rekeyCommand secretsToRekey)}
 
         # We need to save the rekeyed output when any secret was rekeyed, or when the
