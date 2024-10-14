@@ -798,6 +798,7 @@ in an effort to not break complex setups (e.g. WSL passthrough).
 # ⌨ Environment variables
 
 ## `AGENIX_REKEY_PRIMARY_IDENTITY`
+
 If this environment variable is set to a public key, agenix-rekey will try to find it
 among the explicitly specified or implicitly extracted pubkeys (see `age.rekey.masterIdentities`).
 If it finds a matching pubkey, its associated identity file will be added in front of all
@@ -807,3 +808,9 @@ when it is known that only a specific one is available.
 It also allows PIN caching for Yubikeys other than the first one in the list of master identities
 (see [this issue comment](https://github.com/str4d/age-plugin-yubikey/issues/178#issuecomment-2077003145)).
 The description of [pull request #28](https://github.com/oddlama/agenix-rekey/pull/28) provides further details.
+
+## `AGENIX_REKEY_PRIMARY_IDENTITY_ONLY`
+
+If this environment variable is set to `true`, agenix-rekey will only ever try to decrypt with
+the identity given by `AGENIX_REKEY_PRIMARY_IDENTITY`. This is useful in cases where at least one
+of the other configured master identities is always physically available or in other ways inaccessible.
