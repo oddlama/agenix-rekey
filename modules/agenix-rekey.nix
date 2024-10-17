@@ -261,7 +261,7 @@ in {
             description = "The true identifier of this secret as used in `age.secrets`.";
           };
 
-          intermediary = {
+          intermediary = mkOption {
             type = types.bool;
             default = false;
             description = ''
