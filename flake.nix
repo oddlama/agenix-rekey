@@ -35,6 +35,11 @@
         default = self.nixosModules.agenix-rekey;
       };
 
+      homeManagerModules = {
+        agenix-rekey = import ./modules/agenix-rekey-home.nix nixpkgs;
+        default = self.homeManagerModules.agenix-rekey;
+      };
+
       # A nixpkgs overlay that adds the agenix CLI wrapper
       overlays.default = self.overlays.agenix-rekey;
       overlays.agenix-rekey = _final: prev: {
@@ -56,11 +61,13 @@
         # Defaults to rage (pkgs.rage). We only guarantee compatibility for
         # pkgs.age and pkgs.rage.
         agePackage ? (p: p.rage),
+        enableHomeManager ? false,
       }:
         (flake-utils.lib.eachDefaultSystem (system: {
           apps = pkgs.${system}.lib.genAttrs allApps (app:
             import ./apps/${app}.nix {
-              inherit nodes userFlake agePackage;
+              nodes = import ./nix/home-manager.nix {inherit nodes enableHomeManager; pkgs=pkgs.${system};};
+              inherit userFlake agePackage;
               pkgs = pkgs.${system};
             });
         }))

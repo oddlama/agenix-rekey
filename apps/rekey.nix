@@ -27,10 +27,13 @@
 
   # The derivation containing the resulting rekeyed secrets for
   # the given host configuration
+  # TODO: Be aware that this should get the hostName too! Because in output-derivation is searching
+  # for config.network.hostName (which homeManager config doesn't have..)
   derivationFor = hostCfg:
     import ../nix/output-derivation.nix {
       appHostPkgs = pkgs;
       hostConfig = hostCfg.config;
+      resultRekey = "host TODO";
     };
 
   # Returns the outPath/drvPath for the secrets of a given host, without

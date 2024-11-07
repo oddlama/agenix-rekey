@@ -1,6 +1,7 @@
 {
   appHostPkgs,
   hostConfig,
+  resultRekey,
 }: let
   inherit
     (appHostPkgs.lib)
@@ -37,7 +38,7 @@ in
   # allowing the result to be system-agnostic.
   appHostPkgs.stdenv.mkDerivation {
     name = "agenix-rekey-host-secrets";
-    description = "Rekeyed secrets for host ${hostConfig.networking.hostName}";
+    description = "Rekeyed secrets for ${resultRekey}";
 
     # No special inputs are necessary.
     dontUnpack = true;
