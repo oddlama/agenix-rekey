@@ -36,7 +36,7 @@
       };
 
       homeManagerModules = {
-        agenix-rekey = import ./modules/agenix-rekey-home.nix nixpkgs;
+        inherit (self.nixosModules) agenix-rekey;
         default = self.homeManagerModules.agenix-rekey;
       };
 
@@ -66,7 +66,10 @@
         (flake-utils.lib.eachDefaultSystem (system: {
           apps = pkgs.${system}.lib.genAttrs allApps (app:
             import ./apps/${app}.nix {
-              nodes = import ./nix/home-manager.nix {inherit nodes enableHomeManager; pkgs=pkgs.${system};};
+              nodes = import ./nix/home-manager.nix {
+                inherit nodes enableHomeManager;
+                pkgs = pkgs.${system};
+              };
               inherit userFlake agePackage;
               pkgs = pkgs.${system};
             });

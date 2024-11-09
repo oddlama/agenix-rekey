@@ -33,6 +33,7 @@ nixpkgs: {
     types
     ;
 
+  target = (import ../nix/target-name.nix) {inherit pkgs config;};
   # This pubkey is just binary 0x01 in each byte, so you can be sure there is no known private key for this
   dummyPubkey = "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3290gq";
   isAbsolutePath = x: substring 0 1 x == "/";
@@ -65,10 +66,10 @@ nixpkgs: {
     rekeyedPath = builtins.path {path = config.age.rekey.localStorageDir;} + "/${identHash}-${secret.name}.age";
   in
     assert assertMsg (secret.rekeyFile != null -> builtins.pathExists secret.rekeyFile) ''
-      [1;31mhost ${config.networking.hostName}: age.secrets.${secret.id}.rekeyFile ([33m${toString secret.rekeyFile}[m[1;31m) doesn't exist.[0m ${generateHint}
+      [1;31mhost ${target}: age.secrets.${secret.id}.rekeyFile ([33m${toString secret.rekeyFile}[m[1;31m) doesn't exist.[0m ${generateHint}
     '';
     assert assertMsg (builtins.pathExists rekeyedPath) ''
-      [1;31mhost ${config.networking.hostName}: Rekeyed secret for age.secrets.${secret.id} not found, please run `[33magenix rekey -a[1;31m` again and make sure to add the results to git.[m
+      [1;31mhost ${target}: Rekeyed secret for age.secrets.${secret.id} not found, please run `[33magenix rekey -a[1;31m` again and make sure to add the results to git.[m
       [90m  rekeyed secret path: ${toString rekeyedPath}[m
     '';
     # Return rekeyed path after checking that both the rekeyFile (original) and rekeyed version exist
@@ -205,7 +206,7 @@ in {
             using `rage -p -o privkey.age privkey` which protects it in your store.
       ''
       ++ optional (config.age.rekey.hostPubkey == dummyPubkey) ''
-        You have not yet specified rekey.hostPubkey for your host ${config.networking.hostName}.
+        You have not yet specified rekey.hostPubkey for your host ${target}.
         All secrets for this host will be rekeyed with a dummy key, resulting in an activation failure.
 
         This is intentional so you can initially deploy your system to read the actual pubkey.
@@ -372,7 +373,7 @@ in {
               # Choose a directory to store the rekeyed secrets for this host.
               # This cannot be shared with other hosts. Please refer to this path
               # from your flake's root directory and not by a direct path literal like ./secrets
-              age.rekey.localStorageDir = ./. + "/secrets/rekeyed/${config.networking.hostName}";
+              age.rekey.localStorageDir = ./. + "/secrets/rekeyed/${target}";
 
           The new local storage mode is more pure and simpler. It allows building your system without access to the
           (yubi)key, for example in a CI environment. Depending on your threat-model it might be considered less secure,
@@ -642,6 +643,6 @@ in {
       name,
       pkgs,
       ...
-    }: ''(exec 3>&1; ${pkgs.openssh}/bin/ssh-keygen -q -t ed25519 -N "" -C ${lib.escapeShellArg "${config.networking.hostName}:${name}"} -f /proc/self/fd/3 <<<y >/dev/null 2>&1; true)'';
+    }: ''(exec 3>&1; ${pkgs.openssh}/bin/ssh-keygen -q -t ed25519 -N "" -C ${lib.escapeShellArg "${target}:${name}"} -f /proc/self/fd/3 <<<y >/dev/null 2>&1; true)'';
   };
 }
