@@ -44,7 +44,6 @@ nixpkgs: {
   rekeyedSecrets = import ../nix/output-derivation.nix {
     appHostPkgs = rekeyHostPkgs;
     hostConfig = config;
-    resultRekey = "host ${config.networking.hostName}";
   };
 
   rekeyedLocalSecret = secret: let
