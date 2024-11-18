@@ -61,13 +61,13 @@
         # Defaults to rage (pkgs.rage). We only guarantee compatibility for
         # pkgs.age and pkgs.rage.
         agePackage ? (p: p.rage),
-        enableHomeManager ? false,
+        mode ? "nixos",
       }:
         (flake-utils.lib.eachDefaultSystem (system: {
           apps = pkgs.${system}.lib.genAttrs allApps (app:
             import ./apps/${app}.nix {
-              nodes = import ./nix/home-manager.nix {
-                inherit nodes enableHomeManager;
+              nodes = import ./nix/mode.nix {
+                inherit nodes mode;
                 pkgs = pkgs.${system};
               };
               inherit userFlake agePackage;

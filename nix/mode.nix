@@ -1,7 +1,7 @@
 {
   pkgs,
   nodes,
-  enableHomeManager,
+  mode,
   ...
 }: let
   inherit (pkgs.lib) mapAttrsToList mapAttrs' nameValuePair fold hasAttrByPath;
@@ -12,10 +12,10 @@
   listNodesWithHomeManager = mapAttrsToList findHomeManagerForHost nodes;
   combineNodes = x: y: x // y;
   homeManagerNodes = fold combineNodes {} listNodesWithHomeManager;
+  enabledNodes = rec {
+    nixos = nodes;
+    home-manager = homeManagerNodes;
+    all = nixos // home-manager;
+  };
 in
-  nodes
-  // (
-    if enableHomeManager
-    then homeManagerNodes
-    else {}
-  )
+  enabledNodes.${mode}
