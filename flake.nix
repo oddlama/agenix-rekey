@@ -35,6 +35,11 @@
         default = self.nixosModules.agenix-rekey;
       };
 
+      homeManagerModules = {
+        inherit (self.nixosModules) agenix-rekey;
+        default = self.homeManagerModules.agenix-rekey;
+      };
+
       # A nixpkgs overlay that adds the agenix CLI wrapper
       overlays.default = self.overlays.agenix-rekey;
       overlays.agenix-rekey = _final: prev: {
@@ -47,8 +52,12 @@
         # The path of the user's flake. Needed to run a sandbox-relaxed
         # app that saves the rekeyed outputs.
         userFlake,
-        # All nixos definitions that should be considered for rekeying
-        nodes,
+        # configurations where agenix-rekey will search for attributes
+        nixosConfigurations ? {},
+        homeConfigurations ? {},
+        collectHomeManagerConfigurations ? true,
+        # legacy alias for nixosConfigurations see https://github.com/oddlama/agenix-rekey/pull/51
+        nodes ? {},
         # The package sets to use. pkgs.${system} must yield an initialized nixpkgs package set
         pkgs ? self.pkgs,
         # A function that returns the age package given a package set. Use
@@ -60,7 +69,11 @@
         (flake-utils.lib.eachDefaultSystem (system: {
           apps = pkgs.${system}.lib.genAttrs allApps (app:
             import ./apps/${app}.nix {
-              inherit nodes userFlake agePackage;
+              nodes = import ./nix/select-nodes.nix {
+                inherit nodes nixosConfigurations homeConfigurations collectHomeManagerConfigurations;
+                inherit (pkgs.${system}) lib;
+              };
+              inherit userFlake agePackage;
               pkgs = pkgs.${system};
             });
         }))

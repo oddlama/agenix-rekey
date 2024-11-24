@@ -11,6 +11,9 @@
     filterAttrs
     flip
     ;
+  target = (import ./target-name.nix) {
+    config = hostConfig;
+  };
 
   # All secrets that have rekeyFile set. These will be rekeyed.
   secretsToRekey = flip filterAttrs hostConfig.age.secrets (name: secret: let
@@ -37,7 +40,7 @@ in
   # allowing the result to be system-agnostic.
   appHostPkgs.stdenv.mkDerivation {
     name = "agenix-rekey-host-secrets";
-    description = "Rekeyed secrets for host ${hostConfig.networking.hostName}";
+    description = "Rekeyed secrets for ${target}";
 
     # No special inputs are necessary.
     dontUnpack = true;
