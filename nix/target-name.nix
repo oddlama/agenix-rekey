@@ -1,9 +1,5 @@
-{
-  pkgs,
-  config,
-}: let
-  inherit (pkgs.lib) hasAttrByPath;
-  isNixosConfiguration = hasAttrByPath ["networking" "hostName"] config;
+{config}: let
+  isNixosConfiguration = config ? networking.hostName;
 in
   if isNixosConfiguration
   then config.networking.hostName

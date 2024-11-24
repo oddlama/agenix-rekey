@@ -12,7 +12,6 @@
     flip
     ;
   target = (import ./target-name.nix) {
-    pkgs = appHostPkgs;
     config = hostConfig;
   };
 

@@ -52,8 +52,12 @@
         # The path of the user's flake. Needed to run a sandbox-relaxed
         # app that saves the rekeyed outputs.
         userFlake,
-        # All nixos definitions that should be considered for rekeying
-        nodes,
+        # configurations where agenix-rekey will search for attributes
+        nixosConfigurations ? {},
+        homeConfigurations ? {},
+        collectHomeManagerConfigurations ? true,
+        # legacy alias for nixosConfigurations see https://github.com/oddlama/agenix-rekey/pull/51
+        nodes ? {},
         # The package sets to use. pkgs.${system} must yield an initialized nixpkgs package set
         pkgs ? self.pkgs,
         # A function that returns the age package given a package set. Use
@@ -61,14 +65,13 @@
         # Defaults to rage (pkgs.rage). We only guarantee compatibility for
         # pkgs.age and pkgs.rage.
         agePackage ? (p: p.rage),
-        mode ? "nixos",
       }:
         (flake-utils.lib.eachDefaultSystem (system: {
           apps = pkgs.${system}.lib.genAttrs allApps (app:
             import ./apps/${app}.nix {
               nodes = import ./nix/mode.nix {
-                inherit nodes mode;
-                pkgs = pkgs.${system};
+                inherit nodes nixosConfigurations homeConfigurations collectHomeManagerConfigurations;
+                inherit (pkgs.${system}) lib;
               };
               inherit userFlake agePackage;
               pkgs = pkgs.${system};

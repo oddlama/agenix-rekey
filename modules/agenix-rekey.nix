@@ -33,7 +33,7 @@ nixpkgs: {
     types
     ;
 
-  target = (import ../nix/target-name.nix) {inherit pkgs config;};
+  target = (import ../nix/target-name.nix) {inherit config;};
   # This pubkey is just binary 0x01 in each byte, so you can be sure there is no known private key for this
   dummyPubkey = "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3290gq";
   isAbsolutePath = x: substring 0 1 x == "/";
