@@ -69,7 +69,7 @@
         (flake-utils.lib.eachDefaultSystem (system: {
           apps = pkgs.${system}.lib.genAttrs allApps (app:
             import ./apps/${app}.nix {
-              nodes = import ./nix/mode.nix {
+              nodes = import ./nix/select-nodes.nix {
                 inherit nodes nixosConfigurations homeConfigurations collectHomeManagerConfigurations;
                 inherit (pkgs.${system}) lib;
               };
