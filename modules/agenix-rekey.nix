@@ -1,11 +1,12 @@
-nixpkgs: {
+nixpkgs:
+{
   lib,
   config,
   pkgs,
   ...
-}: let
-  inherit
-    (lib)
+}:
+let
+  inherit (lib)
     all
     assertMsg
     concatMapStrings
@@ -33,38 +34,42 @@ nixpkgs: {
     types
     ;
 
-  target = (import ../nix/target-name.nix) {inherit config;};
+  target = (import ../nix/target-name.nix) { inherit config; };
   # This pubkey is just binary 0x01 in each byte, so you can be sure there is no known private key for this
   dummyPubkey = "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3290gq";
   isAbsolutePath = x: substring 0 1 x == "/";
   rekeyHostPkgs =
-    if config.age.rekey.forceRekeyOnSystem == null
-    then pkgs
-    else import nixpkgs {system = config.age.rekey.forceRekeyOnSystem;};
+    if config.age.rekey.forceRekeyOnSystem == null then
+      pkgs
+    else
+      import nixpkgs { system = config.age.rekey.forceRekeyOnSystem; };
 
   rekeyedSecrets = import ../nix/output-derivation.nix {
     appHostPkgs = rekeyHostPkgs;
     hostConfig = config;
   };
 
-  rekeyedLocalSecret = secret: let
-    pubkeyHash = builtins.hashString "sha256" config.age.rekey.hostPubkey;
-    identHash = builtins.substring 0 32 (
-      builtins.hashString "sha256"
-      (pubkeyHash + builtins.hashFile "sha256" secret.rekeyFile)
-    );
+  rekeyedLocalSecret =
+    secret:
+    let
+      pubkeyHash = builtins.hashString "sha256" config.age.rekey.hostPubkey;
+      identHash = builtins.substring 0 32 (
+        builtins.hashString "sha256" (pubkeyHash + builtins.hashFile "sha256" secret.rekeyFile)
+      );
 
-    generateHint =
-      if secret.generator != null
-      then "Did you run `[32magenix generate[m` to generate it and have you added it to git?"
-      else "Have you added it to git?";
+      generateHint =
+        if secret.generator != null then
+          "Did you run `[32magenix generate[m` to generate it and have you added it to git?"
+        else
+          "Have you added it to git?";
 
-    # Use builtins.path to make sure that we have a standalone copy of the subdirectory in the store.
-    # This is important to ensure that the path only changes if there are acutal changes to this
-    # directory. If we were still using userFlake.outPath + "/secrets/[...]" or something similar,
-    # then the path would change on each subsequent build because the flake path changes.
-    rekeyedPath = builtins.path {path = config.age.rekey.localStorageDir;} + "/${identHash}-${secret.name}.age";
-  in
+      # Use builtins.path to make sure that we have a standalone copy of the subdirectory in the store.
+      # This is important to ensure that the path only changes if there are acutal changes to this
+      # directory. If we were still using userFlake.outPath + "/secrets/[...]" or something similar,
+      # then the path would change on each subsequent build because the flake path changes.
+      rekeyedPath =
+        builtins.path { path = config.age.rekey.localStorageDir; } + "/${identHash}-${secret.name}.age";
+    in
     assert assertMsg (secret.rekeyFile != null -> builtins.pathExists secret.rekeyFile) ''
       [1;31mhost ${target}: age.secrets.${secret.id}.rekeyFile ([33m${toString secret.rekeyFile}[m[1;31m) doesn't exist.[0m ${generateHint}
     '';
@@ -73,14 +78,14 @@ nixpkgs: {
       [90m  rekeyed secret path: ${toString rekeyedPath}[m
     '';
     # Return rekeyed path after checking that both the rekeyFile (original) and rekeyed version exist
-      rekeyedPath;
+    rekeyedPath;
 
   generatorType = types.submodule (submod: {
     options = {
       dependencies = mkOption {
         type = types.listOf types.unspecified;
         example = literalExpression ''[ config.age.secrets.basicAuthPw1 nixosConfigurations.machine2.config.age.secrets.basicAuthPw ]'';
-        default = [];
+        default = [ ];
         description = ''
           Other secrets on which this secret depends. This guarantees that in the final
           `agenix generate` script, all dependencies will be generated before
@@ -146,15 +151,16 @@ nixpkgs: {
         internal = true;
         description = "The effective script definition.";
         default =
-          if isString submod.config.script
-          then config.age.generators.${submod.config.script}
-          else submod.config.script;
+          if isString submod.config.script then
+            config.age.generators.${submod.config.script}
+          else
+            submod.config.script;
       };
 
       tags = mkOption {
         type = types.listOf types.str;
-        default = [];
-        example = ["wireguard"];
+        default = [ ];
+        example = [ "wireguard" ];
         description = ''
           Optional list of tags that may be used to refer to secrets that use this generator.
           Useful to regenerate all secrets matching a specific tag using `agenix generate -f -t wireguard`.
@@ -164,12 +170,13 @@ nixpkgs: {
   });
 
   masterIdentityPaths = map (x: x.identity) config.age.rekey.masterIdentities;
-in {
+in
+{
   config = {
     assertions =
       [
         {
-          assertion = config.age.rekey.masterIdentities != [];
+          assertion = config.age.rekey.masterIdentities != [ ];
           message = "rekey.masterIdentities must be set.";
         }
         {
@@ -177,21 +184,28 @@ in {
           message = "All masterIdentities must be referred to by an absolute path, but (${filter isAbsolutePath masterIdentityPaths}) is not.";
         }
       ]
-      ++ flatten (flip mapAttrsToList config.age.secrets
-        (secretName: secretCfg: [
-          {
-            assertion = isString secretCfg.generator -> hasAttr secretCfg.generator config.age.generators;
-            message = "age.secrets.${secretName}: generator '`${secretCfg.generator}`' is not defined in `age.generators`.";
-          }
-          {
-            assertion = secretCfg.generator != null -> secretCfg.rekeyFile != null;
-            message = "age.secrets.${secretName}: `rekeyFile` must be set when using a generator.";
-          }
-        ]));
+      ++ flatten (
+        flip mapAttrsToList config.age.secrets (
+          secretName: secretCfg: [
+            {
+              assertion = isString secretCfg.generator -> hasAttr secretCfg.generator config.age.generators;
+              message = "age.secrets.${secretName}: generator '`${secretCfg.generator}`' is not defined in `age.generators`.";
+            }
+            {
+              assertion = secretCfg.generator != null -> secretCfg.rekeyFile != null;
+              message = "age.secrets.${secretName}: `rekeyFile` must be set when using a generator.";
+            }
+          ]
+        )
+      );
 
-    warnings = let
-      hasGoodSuffix = x: (hasPrefix builtins.storeDir x) -> (hasSuffix ".age" x || hasSuffix ".pub" x || hasSuffix ".hmac" x);
-    in
+    warnings =
+      let
+        hasGoodSuffix =
+          x:
+          (hasPrefix builtins.storeDir x)
+          -> (hasSuffix ".age" x || hasSuffix ".pub" x || hasSuffix ".hmac" x);
+      in
       optional (!all hasGoodSuffix masterIdentityPaths) ''
         At least one of your rekey.masterIdentities references an unencrypted age identity in your nix store!
         ${concatMapStrings (x: "  - ${x}\n") (filter hasGoodSuffix masterIdentityPaths)}
@@ -215,99 +229,152 @@ in {
   };
 
   imports = [
-    (mkRenamedOptionModule ["rekey" "forceRekeyOnSystem"] ["age" "rekey" "forceRekeyOnSystem"])
-    (mkRenamedOptionModule ["rekey" "hostPubkey"] ["age" "rekey" "hostPubkey"])
-    (mkRenamedOptionModule ["rekey" "masterIdentities"] ["age" "rekey" "masterIdentities"])
-    (mkRenamedOptionModule ["rekey" "extraEncryptionPubkeys"] ["age" "rekey" "extraEncryptionPubkeys"])
-    (mkRenamedOptionModule ["rekey" "agePlugins"] ["age" "rekey" "agePlugins"])
-    ({
-      config,
-      options,
-      ...
-    }: {
-      options.rekey.secrets = options.age.secrets // {visible = false;};
-      config = {
-        warnings = optional (config.rekey.secrets != {}) ''
-          The option `rekey.secrets` has been integrated into `age.secrets`.
-          Generally, the new option specification is the compatible with the old one,
-          but all usages of `rekey.secrets.<name>.file` have to be replaced with
-          `age.secrets.<name>.rekeyFile`. Found ocurrences in:
-          ${showOptionWithDefLocs options.rekey.secrets}
-        '';
+    (mkRenamedOptionModule
+      [
+        "rekey"
+        "forceRekeyOnSystem"
+      ]
+      [
+        "age"
+        "rekey"
+        "forceRekeyOnSystem"
+      ]
+    )
+    (mkRenamedOptionModule
+      [
+        "rekey"
+        "hostPubkey"
+      ]
+      [
+        "age"
+        "rekey"
+        "hostPubkey"
+      ]
+    )
+    (mkRenamedOptionModule
+      [
+        "rekey"
+        "masterIdentities"
+      ]
+      [
+        "age"
+        "rekey"
+        "masterIdentities"
+      ]
+    )
+    (mkRenamedOptionModule
+      [
+        "rekey"
+        "extraEncryptionPubkeys"
+      ]
+      [
+        "age"
+        "rekey"
+        "extraEncryptionPubkeys"
+      ]
+    )
+    (mkRenamedOptionModule
+      [
+        "rekey"
+        "agePlugins"
+      ]
+      [
+        "age"
+        "rekey"
+        "agePlugins"
+      ]
+    )
+    (
+      {
+        config,
+        options,
+        ...
+      }:
+      {
+        options.rekey.secrets = options.age.secrets // {
+          visible = false;
+        };
+        config = {
+          warnings = optional (config.rekey.secrets != { }) ''
+            The option `rekey.secrets` has been integrated into `age.secrets`.
+            Generally, the new option specification is the compatible with the old one,
+            but all usages of `rekey.secrets.<name>.file` have to be replaced with
+            `age.secrets.<name>.rekeyFile`. Found ocurrences in:
+            ${showOptionWithDefLocs options.rekey.secrets}
+          '';
 
-        age.secrets =
-          mapAttrs
-          (_: secret:
-            mapAttrs' (n:
-              nameValuePair (
-                if n == "file"
-                then "rekeyFile"
-                else n
-              ))
-            secret)
-          config.rekey.secrets;
-      };
-    })
+          age.secrets = mapAttrs (
+            _: secret: mapAttrs' (n: nameValuePair (if n == "file" then "rekeyFile" else n)) secret
+          ) config.rekey.secrets;
+        };
+      }
+    )
   ];
 
   options.age = {
     # Extend age.secrets with new options
     secrets = mkOption {
-      type = types.attrsOf (types.submodule (submod: {
-        options = {
-          id = mkOption {
-            type = types.str;
-            default = submod.config._module.args.name;
-            readOnly = true;
-            description = "The true identifier of this secret as used in `age.secrets`.";
+      type = types.attrsOf (
+        types.submodule (submod: {
+          options = {
+            id = mkOption {
+              type = types.str;
+              default = submod.config._module.args.name;
+              readOnly = true;
+              description = "The true identifier of this secret as used in `age.secrets`.";
+            };
+
+            intermediary = mkOption {
+              type = types.bool;
+              default = false;
+              description = ''
+                Whether the secret is only required as an intermediary/repository
+                secret and should not be uploaded and decrypted on the host.
+              '';
+            };
+
+            rekeyFile = mkOption {
+              type = types.nullOr types.path;
+              default =
+                if config.age.rekey.generatedSecretsDir != null then
+                  config.age.rekey.generatedSecretsDir + "/${submod.config.id}.age"
+                else
+                  null;
+              example = literalExpression "./secrets/password.age";
+              description = ''
+                The path to the encrypted .age file for this secret. The file must
+                be encrypted with one of the given `age.rekey.masterIdentities` and not with
+                a host-specific key.
+
+                This secret will automatically be rekeyed for hosts that use it, and the resulting
+                host-specific .age file will be set as actual `file` attribute. So naturally this
+                is mutually exclusive with specifying `file` directly.
+
+                If you want to avoid having a `secrets.nix` file and only use rekeyed secrets,
+                you should always use this option instead of `file`.
+              '';
+            };
+
+            generator = mkOption {
+              type = types.nullOr generatorType;
+              default = null;
+              example = {
+                script = "passphrase";
+              };
+              description = "If defined, this generator will be used to bootstrap this secret's when it doesn't exist.";
+            };
           };
-
-          intermediary = mkOption {
-            type = types.bool;
-            default = false;
-            description = ''
-              Whether the secret is only required as an intermediary/repository
-              secret and should not be uploaded and decrypted on the host.
-            '';
+          config = {
+            # Produce a rekeyed age secret
+            file = mkIf (submod.config.rekeyFile != null) (
+              if config.age.rekey.storageMode == "derivation" then
+                "${rekeyedSecrets}/${submod.config.name}.age"
+              else
+                rekeyedLocalSecret config.age.secrets.${submod.config.id}
+            );
           };
-
-          rekeyFile = mkOption {
-            type = types.nullOr types.path;
-            default =
-              if config.age.rekey.generatedSecretsDir != null
-              then config.age.rekey.generatedSecretsDir + "/${submod.config.id}.age"
-              else null;
-            example = literalExpression "./secrets/password.age";
-            description = ''
-              The path to the encrypted .age file for this secret. The file must
-              be encrypted with one of the given `age.rekey.masterIdentities` and not with
-              a host-specific key.
-
-              This secret will automatically be rekeyed for hosts that use it, and the resulting
-              host-specific .age file will be set as actual `file` attribute. So naturally this
-              is mutually exclusive with specifying `file` directly.
-
-              If you want to avoid having a `secrets.nix` file and only use rekeyed secrets,
-              you should always use this option instead of `file`.
-            '';
-          };
-
-          generator = mkOption {
-            type = types.nullOr generatorType;
-            default = null;
-            example = {script = "passphrase";};
-            description = "If defined, this generator will be used to bootstrap this secret's when it doesn't exist.";
-          };
-        };
-        config = {
-          # Produce a rekeyed age secret
-          file = mkIf (submod.config.rekeyFile != null) (
-            if config.age.rekey.storageMode == "derivation"
-            then "${rekeyedSecrets}/${submod.config.name}.age"
-            else rekeyedLocalSecret config.age.secrets.${submod.config.id}
-          );
-        };
-      }));
+        })
+      );
     };
 
     generators = mkOption {
@@ -356,7 +423,10 @@ in {
       };
 
       storageMode = mkOption {
-        type = types.enum ["derivation" "local"];
+        type = types.enum [
+          "derivation"
+          "local"
+        ];
         default = abort ''
           !!!
           agenix-rekey now supports storing rekeyed secrets locally instead of as a derivation.
@@ -424,7 +494,11 @@ in {
 
       derivation = mkOption {
         type = types.package;
-        default = assert assertMsg (config.age.rekey.storageMode == "derivation") ''Accessing the secrets derivation is only possible when `storageMode` is set to `"derivation"`''; rekeyedSecrets;
+        default =
+          assert assertMsg (
+            config.age.rekey.storageMode == "derivation"
+          ) ''Accessing the secrets derivation is only possible when `storageMode` is set to `"derivation"`'';
+          rekeyedSecrets;
         readOnly = true;
         description = ''
           Only used when `storageMode = "derivation"`.
@@ -488,12 +562,7 @@ in {
         example = "x86_64-linux";
       };
       hostPubkey = mkOption {
-        type = with types;
-          coercedTo path (x:
-            if isPath x
-            then readFile x
-            else x)
-          str;
+        type = with types; coercedTo path (x: if isPath x then readFile x else x) str;
         description = ''
           The age public key to use as a recipient when rekeying. This either has to be the
           path to an age public key file, or the public key itself in string form.
@@ -517,9 +586,11 @@ in {
         #example = "/etc/ssh/ssh_host_ed25519_key.pub";
       };
       masterIdentities = mkOption {
-        type = with types; let
-          identityPathType = coercedTo path toString str;
-        in
+        type =
+          with types;
+          let
+            identityPathType = coercedTo path toString str;
+          in
           listOf (
             # By coercing the old identityPathType into a canonical submodule of the form
             # ```
@@ -529,21 +600,11 @@ in {
             # }
             # ```
             # we don't have to worry about it at a later stage.
-            coercedTo
-            identityPathType
-            (p:
-              if isAttrs p
-              then p
-              else {identity = p;})
-            (submodule {
+            coercedTo identityPathType (p: if isAttrs p then p else { identity = p; }) (submodule {
               options = {
-                identity = mkOption {type = identityPathType;};
+                identity = mkOption { type = identityPathType; };
                 pubkey = mkOption {
-                  type = nullOr (coercedTo path (x:
-                    if isPath x
-                    then readFile x
-                    else x)
-                  str);
+                  type = nullOr (coercedTo path (x: if isPath x then readFile x else x) str);
                   default = null;
                 };
               };
@@ -596,7 +657,7 @@ in {
           split-identities is fine, but if you are using plain age identities, make sure that they
           are password protected.
         '';
-        default = [];
+        default = [ ];
         example = [
           ./secrets/my-public-yubikey-identity.txt
           {
@@ -616,12 +677,15 @@ in {
           If the coerced string is an absolute path, it will be used as if it was a recipient file.
           Otherwise, the string will be interpreted as a public key.
         '';
-        default = [];
-        example = [./backup-key.pub "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3290gq"];
+        default = [ ];
+        example = [
+          ./backup-key.pub
+          "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3290gq"
+        ];
       };
       agePlugins = mkOption {
         type = types.listOf types.package;
-        default = [rekeyHostPkgs.age-plugin-yubikey];
+        default = [ rekeyHostPkgs.age-plugin-yubikey ];
         description = ''
           A list of plugins that should be available to rage while rekeying.
           They will be added to the PATH with lowest-priority before rage is invoked,
@@ -633,16 +697,18 @@ in {
   };
 
   config.age.generators = {
-    alnum = {pkgs, ...}: "${pkgs.pwgen}/bin/pwgen -s 48 1";
-    base64 = {pkgs, ...}: "${pkgs.openssl}/bin/openssl rand -base64 32";
-    hex = {pkgs, ...}: "${pkgs.openssl}/bin/openssl rand -hex 24";
-    passphrase = {pkgs, ...}: "${pkgs.xkcdpass}/bin/xkcdpass --numwords=6 --delimiter=' '";
-    dhparams = {pkgs, ...}: "${pkgs.openssl}/bin/openssl dhparam 4096";
-    ssh-ed25519 = {
-      lib,
-      name,
-      pkgs,
-      ...
-    }: ''(exec 3>&1; ${pkgs.openssh}/bin/ssh-keygen -q -t ed25519 -N "" -C ${lib.escapeShellArg "${target}:${name}"} -f /proc/self/fd/3 <<<y >/dev/null 2>&1; true)'';
+    alnum = { pkgs, ... }: "${pkgs.pwgen}/bin/pwgen -s 48 1";
+    base64 = { pkgs, ... }: "${pkgs.openssl}/bin/openssl rand -base64 32";
+    hex = { pkgs, ... }: "${pkgs.openssl}/bin/openssl rand -hex 24";
+    passphrase = { pkgs, ... }: "${pkgs.xkcdpass}/bin/xkcdpass --numwords=6 --delimiter=' '";
+    dhparams = { pkgs, ... }: "${pkgs.openssl}/bin/openssl dhparam 4096";
+    ssh-ed25519 =
+      {
+        lib,
+        name,
+        pkgs,
+        ...
+      }:
+      ''(exec 3>&1; ${pkgs.openssh}/bin/ssh-keygen -q -t ed25519 -N "" -C ${lib.escapeShellArg "${target}:${name}"} -f /proc/self/fd/3 <<<y >/dev/null 2>&1; true)'';
   };
 }

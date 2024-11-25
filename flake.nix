@@ -16,14 +16,16 @@
     };
   };
 
-  outputs = inputs: let
-    allApps = [
-      "edit"
-      "generate"
-      "rekey"
-    ];
-  in
-    inputs.flake-parts.lib.mkFlake {inherit inputs;} {
+  outputs =
+    inputs:
+    let
+      allApps = [
+        "edit"
+        "generate"
+        "rekey"
+      ];
+    in
+    inputs.flake-parts.lib.mkFlake { inherit inputs; } {
       imports = [
         inputs.devshell.flakeModule
         inputs.flake-parts.flakeModules.easyOverlay
@@ -37,95 +39,100 @@
         "aarch64-linux"
       ];
 
-      flake = {
-        config,
-        lib,
-        ...
-      }: {
-        flakeModule = ./flake-module.nix;
-        nixosModules = {
-          agenix-rekey = import ./modules/agenix-rekey.nix inputs.nixpkgs;
-          agenixRekey = config.nixosModules.agenix-rekey; # backward compat
-          default = config.nixosModules.agenix-rekey;
-        };
-        homeManagerModules = {
-          inherit (config.nixosModules) agenix-rekey;
-          default = config.homeManagerModules.agenix-rekey;
-        };
-
-        configure = {
-          # The path of the user's flake. Needed to run a sandbox-relaxed
-          # app that saves the rekeyed outputs.
-          userFlake,
-          # Configurations where agenix-rekey will search for attributes
-          nixosConfigurations ? {},
-          homeConfigurations ? {},
-          collectHomeManagerConfigurations ? true,
-          # Legacy alias for nixosConfigurations see https://github.com/oddlama/agenix-rekey/pull/51
-          nodes ? {},
-          # The package sets to use. pkgs.${system} must yield an initialized nixpkgs package set
-          pkgs ? config.pkgs,
-          # A function that returns the age package given a package set. Use
-          # this to override which tools is used for encrypting / decrypting.
-          # Defaults to rage (pkgs.rage). We only guarantee compatibility for
-          # pkgs.age and pkgs.rage.
-          agePackage ? (p: p.rage),
-          # The systems to generate apps for
-          systems ? [
-            "x86_64-linux"
-            "aarch64-linux"
-            "x86_64-darwin"
-            "aarch64-darwin"
-          ],
+      flake =
+        {
+          config,
+          lib,
+          ...
         }:
-          lib.genAttrs systems (
-            system:
+        {
+          flakeModule = ./flake-module.nix;
+          nixosModules = {
+            agenix-rekey = import ./modules/agenix-rekey.nix inputs.nixpkgs;
+            agenixRekey = config.nixosModules.agenix-rekey; # backward compat
+            default = config.nixosModules.agenix-rekey;
+          };
+          homeManagerModules = {
+            inherit (config.nixosModules) agenix-rekey;
+            default = config.homeManagerModules.agenix-rekey;
+          };
+
+          configure =
+            {
+              # The path of the user's flake. Needed to run a sandbox-relaxed
+              # app that saves the rekeyed outputs.
+              userFlake,
+              # Configurations where agenix-rekey will search for attributes
+              nixosConfigurations ? { },
+              homeConfigurations ? { },
+              collectHomeManagerConfigurations ? true,
+              # Legacy alias for nixosConfigurations see https://github.com/oddlama/agenix-rekey/pull/51
+              nodes ? { },
+              # The package sets to use. pkgs.${system} must yield an initialized nixpkgs package set
+              pkgs ? config.pkgs,
+              # A function that returns the age package given a package set. Use
+              # this to override which tools is used for encrypting / decrypting.
+              # Defaults to rage (pkgs.rage). We only guarantee compatibility for
+              # pkgs.age and pkgs.rage.
+              agePackage ? (p: p.rage),
+              # The systems to generate apps for
+              systems ? [
+                "x86_64-linux"
+                "aarch64-linux"
+                "x86_64-darwin"
+                "aarch64-darwin"
+              ],
+            }:
+            lib.genAttrs systems (
+              system:
               pkgs.${system}.lib.genAttrs allApps (
                 app:
-                  import ./apps/${app}.nix {
-                    nodes = import ./nix/select-nodes.nix {
-                      inherit
-                        nodes
-                        nixosConfigurations
-                        homeConfigurations
-                        collectHomeManagerConfigurations
-                        ;
-                      inherit (pkgs.${system}) lib;
-                    };
-                    inherit userFlake agePackage;
-                    pkgs = pkgs.${system};
-                  }
+                import ./apps/${app}.nix {
+                  nodes = import ./nix/select-nodes.nix {
+                    inherit
+                      nodes
+                      nixosConfigurations
+                      homeConfigurations
+                      collectHomeManagerConfigurations
+                      ;
+                    inherit (pkgs.${system}) lib;
+                  };
+                  inherit userFlake agePackage;
+                  pkgs = pkgs.${system};
+                }
               )
-          );
-      };
-
-      perSystem = {
-        config,
-        pkgs,
-        ...
-      }: {
-        devshells.default = {
-          packages = [
-            config.treefmt.build.wrapper
-          ];
-          devshell.startup.pre-commit.text = config.pre-commit.installationScript;
+            );
         };
 
-        pre-commit.settings.hooks.treefmt.enable = true;
-        treefmt = {
-          projectRootFile = "flake.nix";
-          programs = {
-            deadnix.enable = true;
-            statix.enable = true;
-            nixfmt.enable = true;
-            rustfmt.enable = true;
+      perSystem =
+        {
+          config,
+          pkgs,
+          ...
+        }:
+        {
+          devshells.default = {
+            packages = [
+              config.treefmt.build.wrapper
+            ];
+            devshell.startup.pre-commit.text = config.pre-commit.installationScript;
           };
-        };
 
-        packages.default = pkgs.callPackage ./nix/package.nix {
-          inherit allApps;
+          pre-commit.settings.hooks.treefmt.enable = true;
+          treefmt = {
+            projectRootFile = "flake.nix";
+            programs = {
+              deadnix.enable = true;
+              statix.enable = true;
+              nixfmt.enable = true;
+              rustfmt.enable = true;
+            };
+          };
+
+          packages.default = pkgs.callPackage ./nix/package.nix {
+            inherit allApps;
+          };
+          overlayAttrs.agenix-rekey = config.packages.default;
         };
-        overlayAttrs.agenix-rekey = config.packages.default;
-      };
     };
 }

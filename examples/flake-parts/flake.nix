@@ -8,8 +8,9 @@
     agenix-rekey.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = inputs:
-    inputs.flake-parts.lib.mkFlake {inherit inputs;} {
+  outputs =
+    inputs:
+    inputs.flake-parts.lib.mkFlake { inherit inputs; } {
       imports = [
         inputs.agenix-rekey.flakeModule
       ];
@@ -28,39 +29,44 @@
             inputs.agenix-rekey.nixosModules.default
 
             # configuration.nix
-            ({config, ...}: {
-              age.rekey = {
-                hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOy3dC8cCbucumHphroUzZUTKkM0jL3mG3+tkeAWgIdX";
-                masterIdentities = [./yubikey-identity.pub];
-                storageMode = "local";
-                localStorageDir = ./. + "/secrets/rekeyed/${config.networking.hostName}";
-              };
+            (
+              { config, ... }:
+              {
+                age.rekey = {
+                  hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOy3dC8cCbucumHphroUzZUTKkM0jL3mG3+tkeAWgIdX";
+                  masterIdentities = [ ./yubikey-identity.pub ];
+                  storageMode = "local";
+                  localStorageDir = ./. + "/secrets/rekeyed/${config.networking.hostName}";
+                };
 
-              age.secrets.root-pw-hash.rekeyFile = ./root-pw-hash.age;
-              users.users.root.hashedPasswordFile = config.age.secrets.root-pw-hash.path;
-            })
+                age.secrets.root-pw-hash.rekeyFile = ./root-pw-hash.age;
+                users.users.root.hashedPasswordFile = config.age.secrets.root-pw-hash.path;
+              }
+            )
           ];
         };
       };
 
-      perSystem = {
-        config,
-        pkgs,
-        ...
-      }: {
-        # Tell agenix-rekey which hosts to consider
-        agenix-rekey.nixosConfigurations = inputs.self.nixosConfigurations;
+      perSystem =
+        {
+          config,
+          pkgs,
+          ...
+        }:
+        {
+          # Tell agenix-rekey which hosts to consider
+          agenix-rekey.nixosConfigurations = inputs.self.nixosConfigurations;
 
-        # Add agenix-rekey to your devshell, so you can use the `agenix rekey` command
-        devShells.default = pkgs.mkShell {
-          nativeBuildInputs = [
-            config.agenix-rekey.package
-          ];
+          # Add agenix-rekey to your devshell, so you can use the `agenix rekey` command
+          devShells.default = pkgs.mkShell {
+            nativeBuildInputs = [
+              config.agenix-rekey.package
+            ];
 
-          # Automatically adds rekeyed secrets to git without
-          # requiring `agenix rekey -a`.
-          env.AGENIX_REKEY_ADD_TO_GIT = true;
+            # Automatically adds rekeyed secrets to git without
+            # requiring `agenix rekey -a`.
+            env.AGENIX_REKEY_ADD_TO_GIT = true;
+          };
         };
-      };
     };
 }

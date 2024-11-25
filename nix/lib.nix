@@ -4,9 +4,9 @@
   nodes,
   agePackage,
   ...
-}: let
-  inherit
-    (pkgs.lib)
+}:
+let
+  inherit (pkgs.lib)
     catAttrs
     concatLists
     concatMapStrings
@@ -22,24 +22,24 @@
 
   # Collect rekeying options from all hosts
   mergeArray = f: unique (concatLists (mapAttrsToList (_: f) nodes));
-  mergedAgePlugins = mergeArray (x: x.config.age.rekey.agePlugins or []);
-  mergedMasterIdentities = mergeArray (x: x.config.age.rekey.masterIdentities or []);
-  mergedExtraEncryptionPubkeys = mergeArray (x: x.config.age.rekey.extraEncryptionPubkeys or []);
-  mergedSecrets = mergeArray (x: filter (y: y != null) (mapAttrsToList (_: s: s.rekeyFile) x.config.age.secrets));
+  mergedAgePlugins = mergeArray (x: x.config.age.rekey.agePlugins or [ ]);
+  mergedMasterIdentities = mergeArray (x: x.config.age.rekey.masterIdentities or [ ]);
+  mergedExtraEncryptionPubkeys = mergeArray (x: x.config.age.rekey.extraEncryptionPubkeys or [ ]);
+  mergedSecrets = mergeArray (
+    x: filter (y: y != null) (mapAttrsToList (_: s: s.rekeyFile) x.config.age.secrets)
+  );
 
   isAbsolutePath = x: substring 0 1 x == "/";
-  pubkeyOpt = x:
-    if isAbsolutePath x
-    then "-R ${escapeShellArg x}"
-    else "-r ${escapeShellArg x}";
-  toIdentityArgs = identities:
-    concatStringsSep " " (map (x: "-i ${escapeShellArg x.identity}") identities);
+  pubkeyOpt = x: if isAbsolutePath x then "-R ${escapeShellArg x}" else "-r ${escapeShellArg x}";
+  toIdentityArgs =
+    identities: concatStringsSep " " (map (x: "-i ${escapeShellArg x.identity}") identities);
 
   ageProgram = getExe (agePackage pkgs);
   # Collect all paths to enabled age plugins
   envPath = ''PATH="$PATH"${concatMapStrings (x: ":${escapeShellArg x}/bin") mergedAgePlugins}'';
   # Explicitly specified recipients, containing both the explicit master pubkeys as well as the extra pubkeys
-  extraEncryptionPubkeys = filter (x: x != null) (catAttrs "pubkey" mergedMasterIdentities) ++ mergedExtraEncryptionPubkeys;
+  extraEncryptionPubkeys =
+    filter (x: x != null) (catAttrs "pubkey" mergedMasterIdentities) ++ mergedExtraEncryptionPubkeys;
 
   extraEncryptionPubkeyArgs = concatStringsSep " " (map pubkeyOpt extraEncryptionPubkeys);
   # For decryption, we require access to all master identities
@@ -47,7 +47,7 @@
 
   ageWrapperScript = pkgs.writeShellApplication {
     name = "ageWrapper";
-    runtimeInputs = with pkgs; [gnugrep];
+    runtimeInputs = with pkgs; [ gnugrep ];
     text = ''
       # Redirect messages to stderr.
       warn() { echo "warning:" "$@" >&2; }
@@ -57,22 +57,21 @@
       # pubkey -> identity file
       declare -A masterIdentityMap
       # Master identities that have a pubkey can be added without further treatment.
-      ${
-        concatStringsSep "\n"
-        (map
-          (x: ''masterIdentityMap[${escapeShellArg (removeSuffix "\n" x.pubkey)}]=${escapeShellArg x.identity}'')
-          (filter (x: x.pubkey != null) mergedMasterIdentities))
-      }
+      ${concatStringsSep "\n" (
+        map (
+          x:
+          ''masterIdentityMap[${escapeShellArg (removeSuffix "\n" x.pubkey)}]=${escapeShellArg x.identity}''
+        ) (filter (x: x.pubkey != null) mergedMasterIdentities)
+      )}
 
       # For master identies with no explicit pubkey, try extracting a pubkey from the file first.
       # Collect final identity arguments for encryption in an array.
       masterIdentityArgs=()
       # shellcheck disable=SC2041,SC2043
       for file in ${
-        concatStringsSep " "
-        (map
-          (x: "${escapeShellArg x.identity}")
-          (filter (x: x.pubkey == null) mergedMasterIdentities))
+        concatStringsSep " " (
+          map (x: "${escapeShellArg x.identity}") (filter (x: x.pubkey == null) mergedMasterIdentities)
+        )
       }; do
         # Keep track if a file was processed.
         file_processed=false
@@ -151,7 +150,8 @@
       fi
     '';
   };
-in {
+in
+{
   userFlakeDir = toString userFlake.outPath;
   inherit mergedSecrets;
 
@@ -172,7 +172,10 @@ in {
   # as to not interfere with generator setups that use stdin and stdout to pass data through (r)age.
   ageMasterEncrypt = "${ageWrapperScript}/bin/ageWrapper encrypt";
   ageMasterDecrypt = "${ageWrapperScript}/bin/ageWrapper decrypt";
-  ageHostEncrypt = hostAttrs: let
-    hostPubkey = removeSuffix "\n" hostAttrs.config.age.rekey.hostPubkey;
-  in "${envPath} ${ageProgram} -e ${pubkeyOpt hostPubkey}";
+  ageHostEncrypt =
+    hostAttrs:
+    let
+      hostPubkey = removeSuffix "\n" hostAttrs.config.age.rekey.hostPubkey;
+    in
+    "${envPath} ${ageProgram} -e ${pubkeyOpt hostPubkey}";
 }

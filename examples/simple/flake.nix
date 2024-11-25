@@ -8,7 +8,8 @@
     agenix-rekey.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = {self, ...} @ inputs:
+  outputs =
+    { self, ... }@inputs:
     {
       # A simple nixos host which uses one secret
       nixosConfigurations.host1 = inputs.nixpkgs.lib.nixosSystem {
@@ -18,17 +19,20 @@
           inputs.agenix-rekey.nixosModules.default
 
           # configuration.nix
-          ({config, ...}: {
-            age.rekey = {
-              hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOy3dC8cCbucumHphroUzZUTKkM0jL3mG3+tkeAWgIdX";
-              masterIdentities = [./yubikey-identity.pub];
-              storageMode = "local";
-              localStorageDir = ./. + "/secrets/rekeyed/${config.networking.hostName}";
-            };
+          (
+            { config, ... }:
+            {
+              age.rekey = {
+                hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOy3dC8cCbucumHphroUzZUTKkM0jL3mG3+tkeAWgIdX";
+                masterIdentities = [ ./yubikey-identity.pub ];
+                storageMode = "local";
+                localStorageDir = ./. + "/secrets/rekeyed/${config.networking.hostName}";
+              };
 
-            age.secrets.root-pw-hash.rekeyFile = ./root-pw-hash.age;
-            users.users.root.hashedPasswordFile = config.age.secrets.root-pw-hash.path;
-          })
+              age.secrets.root-pw-hash.rekeyFile = ./root-pw-hash.age;
+              users.users.root.hashedPasswordFile = config.age.secrets.root-pw-hash.path;
+            }
+          )
         ];
       };
 
@@ -41,12 +45,12 @@
       # Create a pkgs with the agenix-rekey overlay so we have access to `pkgs.agenix-rekey` later
       pkgs = import inputs.nixpkgs {
         inherit system;
-        overlays = [inputs.agenix-rekey.overlays.default];
+        overlays = [ inputs.agenix-rekey.overlays.default ];
       };
 
       # Add agenix-rekey to your devshell, so you can use the `agenix rekey` command
       devShells.default = pkgs.mkShell {
-        packages = [pkgs.agenix-rekey];
+        packages = [ pkgs.agenix-rekey ];
         # ...
       };
     });
