@@ -90,9 +90,9 @@ if you don't want to use the wrapper, which may be useful for use in your own sc
     # derivations will not be found!
     agenix-rekey = agenix-rekey.configure {
       userFlake = self;
-      nodes = self.nixosConfigurations;
+      nixosConfigurations = self.nixosConfigurations;
       # Example for colmena:
-      # inherit ((colmena.lib.makeHive self.colmena).introspect (x: x)) nodes;
+      # nixosConfigurations = ((colmena.lib.makeHive self.colmena).introspect (x: x)).nodes;
     };
   }
   # OPTIONAL: This part is only needed if you want to have the agenix
@@ -140,10 +140,10 @@ Usage with flake-parts
           nativeBuildInputs = [ config.agenix-rekey.package ];
         };
 
-        # You can define agenix-rekey.nodes if you want to change which
-        # hosts # are considered for rekeying.
+        # You can define agenix-rekey.nixosConfigurations if you want to change which
+        # hosts are considered for rekeying.
         # Refer to the flake.parts section on agenix-rekey to see all available options.
-        agenix-rekey.nodes = inputs.self.nixosConfigurations; # (not technically needed, as it is already the default)
+        agenix-rekey.nixosConfigurations = inputs.self.nixosConfigurations; # (not technically needed, as it is already the default)
       };
     };
 }

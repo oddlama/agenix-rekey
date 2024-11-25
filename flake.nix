@@ -52,11 +52,11 @@
         # The path of the user's flake. Needed to run a sandbox-relaxed
         # app that saves the rekeyed outputs.
         userFlake,
-        # configurations where agenix-rekey will search for attributes
+        # Configurations where agenix-rekey will search for attributes
         nixosConfigurations ? {},
         homeConfigurations ? {},
         collectHomeManagerConfigurations ? true,
-        # legacy alias for nixosConfigurations see https://github.com/oddlama/agenix-rekey/pull/51
+        # Legacy alias for nixosConfigurations see https://github.com/oddlama/agenix-rekey/pull/51
         nodes ? {},
         # The package sets to use. pkgs.${system} must yield an initialized nixpkgs package set
         pkgs ? self.pkgs,

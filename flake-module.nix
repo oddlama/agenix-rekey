@@ -28,7 +28,16 @@ in {
           (_system: config':
             lib.genAttrs allApps (app:
               import ./apps/${app}.nix {
-                inherit (config'.agenix-rekey) nodes pkgs;
+                nodes = import ./nix/select-nodes.nix {
+                  inherit
+                    (config'.agenix-rekey)
+                    nixosConfigurations
+                    homeConfigurations
+                    collectHomeManagerConfigurations
+                    ;
+                  inherit (config'.agenix-rekey.pkgs) lib;
+                };
+                inherit (config'.agenix-rekey) pkgs;
                 agePackage = _: config'.agenix-rekey.agePackage;
                 userFlake = self;
               }))
@@ -48,19 +57,40 @@ in {
       pkgs,
       ...
     }: {
+      imports = [
+        (lib.mkRenamedOptionModule ["agenix-rekey" "nodes"] ["agenix-rekey" "nixosConfigurations"])
+      ];
+
       options.agenix-rekey = {
-        nodes = mkOption {
+        nixosConfigurations = mkOption {
           type = types.lazyAttrsOf types.unspecified;
           description = "All nixosSystems that should be considered for rekeying.";
           default = self.nixosConfigurations;
           defaultText = lib.literalExpression "self.nixosConfigurations";
         };
+
+        homeConfigurations = mkOption {
+          type = types.lazyAttrsOf types.unspecified;
+          description = "All home manager configurations that should be considered for rekeying.";
+          default = {};
+          # XXX: in case home-manager gets flake-parts integration:
+          # default = self.homeConfigurations;
+          # defaultText = lib.literalExpression "self.homeConfigurations";
+        };
+
+        collectHomeManagerConfigurations = mkOption {
+          type = types.bool;
+          description = "Whether to collect home manager configurations automatically from specified NixOS configurations.";
+          default = true;
+        };
+
         pkgs = mkOption {
           type = types.unspecified;
           description = "The package set to use when defining agenix-rekey scripts.";
           default = pkgs;
           defaultText = lib.literalExpression "pkgs # (module argument)";
         };
+
         agePackage = mkPackageOption config.agenix-rekey.pkgs "rage" {
           extraDescription = ''
             Determines the age package used for encrypting / decrypting.
@@ -68,6 +98,7 @@ in {
             `pkgs.age` and `pkgs.rage`.
           '';
         };
+
         package = mkOption {
           type = types.package;
           default = config.agenix-rekey.pkgs.callPackage ./nix/package.nix {
