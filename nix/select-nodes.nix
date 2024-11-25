@@ -9,7 +9,7 @@
   inherit (lib) mapAttrsToList mapAttrs' nameValuePair foldl' optionalAttrs;
   effectiveNixosConfigurations = nodes // nixosConfigurations; # include legacy parameter
   findHomeManagerForHost = hostName: hostCfg:
-    if (hostCfg ? config.home-manager.users)
+    if (hostCfg ? config.home-manager.users.age.rekey)
     then (mapAttrs' (name: value: nameValuePair "host-${hostName}-user-${name}" {config = value;}) hostCfg.config.home-manager.users)
     else {};
   listNixosConfigsWithHomeManager = mapAttrsToList findHomeManagerForHost effectiveNixosConfigurations;
