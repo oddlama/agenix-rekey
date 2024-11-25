@@ -1,0 +1,7 @@
+#       Serial: 15212345, Slot: 1
+#         Name: My Yubikey
+#      Created: Thu, 1 Jan 2023 10:00:00 +0000
+#   PIN policy: Once   (A PIN is required once per session, if set)
+# Touch policy: Cached (A physical touch is required for decryption, and is cached for 15 seconds)
+#    Recipient: age1yubikey1av13fn59hgkurnbnuc93zgulaahrg246cgr6mmwdww655m2r3mlyl4gkxzp
+AGE-PLUGIN-YUBIKEY-16AVSIUGSEAJKYAHPUQTJE
