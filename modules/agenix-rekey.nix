@@ -10,9 +10,11 @@ let
     all
     assertMsg
     concatMapStrings
+    escapeShellArg
     filter
     flatten
     flip
+    getExe
     hasAttr
     hasPrefix
     hasSuffix
@@ -29,6 +31,7 @@ let
     nameValuePair
     optional
     readFile
+    removeSuffix
     showOptionWithDefLocs
     substring
     types
@@ -48,6 +51,15 @@ let
     appHostPkgs = rekeyHostPkgs;
     hostConfig = config;
   };
+
+  # A decryptable dummy secret that is used as a replacement when a secret specifies `intermediary = true`.
+  pubkeyOpt = x: if isAbsolutePath x then "-R ${escapeShellArg x}" else "-r ${escapeShellArg x}";
+  dummySecret = pkgs.runCommand "generate-dummy-secret-${target}.age" { } ''
+    ${getExe pkgs.rage} -e ${pubkeyOpt (removeSuffix "\n" config.age.rekey.hostPubkey)} -o "$out" <<EOF
+    # This is a dummy secret.
+    # It was placed here because the original secret is an intermediary secrets.
+    EOF
+  '';
 
   rekeyedLocalSecret =
     secret:
@@ -367,7 +379,10 @@ in
           config = {
             # Produce a rekeyed age secret
             file = mkIf (submod.config.rekeyFile != null) (
-              if config.age.rekey.storageMode == "derivation" then
+              if submod.config.intermediary then
+                # produce a dummy secret instead, unfortunately there is no way to omit it entirely in agenix as of Nov 2024.
+                dummySecret
+              else if config.age.rekey.storageMode == "derivation" then
                 "${rekeyedSecrets}/${submod.config.name}.age"
               else
                 rekeyedLocalSecret config.age.secrets.${submod.config.id}
