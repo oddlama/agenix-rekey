@@ -78,34 +78,6 @@
             });
         }))
         .apps;
-
-      # XXX: deprecated, scheduled for removal in late 2024. Use the package instead of
-      # defining apps. This is just a compatibility wrapper that defines apps with
-      # the same interface as before.
-      defineApps = argsOrSelf: pkgs: nodes:
-        pkgs.lib.warn ''
-          The `agenix-rekey.defineApps self pkgs nodes` function is deprecated and will
-          be removed late 2024. The new approach will unclutter your flake's app definitions
-          and provide a hermetic entrypoint for agenix-rekey, which can be accessed more
-          egonomically via a new CLI wrapper 'agenix'. Alternatively you can still run
-          the scripts directly from your flake using `nix run .#agenix-rekey.$system.<app>`,
-          in case you don't want to use the wrapper.
-
-          Please remove your current `agenix-rekey.defineApps` call entirely from your apps
-          and instead add a new top-level output like this:
-
-            agenix-rekey = agenix-rekey.configure {
-              userFlake = self;
-              nodes = self.nixosSystems;
-            };
-
-          The new wrapper CLI can be accessed via `nix shell github:oddlama/agenix-rekey` or by
-          adding `agenix-rekey.packages.''${system}.default` to your devshell. For more information,
-          please visit the github page and refer to the updated instructions in the README.''
-        (import ./apps) {
-          userFlake = argsOrSelf; # argsOrSelf = self
-          inherit pkgs nodes;
-        };
     }
     // flake-utils.lib.eachDefaultSystem (system: rec {
       pkgs = import nixpkgs {
