@@ -71,7 +71,7 @@
               # Legacy alias for nixosConfigurations see https://github.com/oddlama/agenix-rekey/pull/51
               nodes ? { },
               # The package sets to use. pkgs.${system} must yield an initialized nixpkgs package set
-              pkgs ? config.pkgs,
+              pkgs ? pkgs,
               # A function that returns the age package given a package set. Use
               # this to override which tools is used for encrypting / decrypting.
               # Defaults to rage (pkgs.rage). We only guarantee compatibility for
@@ -87,7 +87,12 @@
             }:
             lib.genAttrs systems (
               system:
-              pkgs.${system}.lib.genAttrs allApps (
+              let
+                pkgs' = import inputs.nixpkgs {
+                  inherit system;
+                };
+              in
+              lib.genAttrs allApps (
                 app:
                 import ./apps/${app}.nix {
                   nodes = import ./nix/select-nodes.nix {
@@ -97,10 +102,10 @@
                       homeConfigurations
                       collectHomeManagerConfigurations
                       ;
-                    inherit (pkgs.${system}) lib;
+                    inherit (pkgs') lib;
                   };
                   inherit userFlake agePackage;
-                  pkgs = pkgs.${system};
+                  pkgs = pkgs';
                 }
               )
             );
