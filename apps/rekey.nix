@@ -10,7 +10,6 @@ let
     concatMapStrings
     concatStringsSep
     escapeShellArg
-    filter
     filterAttrs
     flip
     hasPrefix
@@ -40,8 +39,24 @@ let
   drvPathFor =
     hostCfg: builtins.unsafeDiscardStringContext (toString (derivationFor hostCfg).drvPath);
 
-  nodesWithDerivationStorage = filter (x: x.config.age.rekey.storageMode == "derivation") (
-    attrValues nodes
+  nodesWithDerivationStorage = attrValues (
+    filterAttrs (
+      n: v:
+      # This is our first time accessing the age and age.rekey properties.
+      # If both agenix and agenix-rekey are not loaded onto the node being
+      # processed, `agenix rekey` will fail.  This is our opportunity to
+      # inform the user which node is problematic and what must be done to
+      # address the issue.
+      assert assertMsg (v.config ? age) ''
+        Node "${n}" is missing the agenix module.
+        agenix-rekey cannot continue until all nodes include the agenix module.
+      '';
+      assert assertMsg (v.config.age ? rekey) ''
+        Node "${n}" is missing the agenix-rekey module.
+        agenix-rekey cannot continue until all nodes include the agenix-rekey module.
+      '';
+      v.config.age.rekey.storageMode == "derivation"
+    ) nodes
   );
 
   rekeyCommandsForHost =
