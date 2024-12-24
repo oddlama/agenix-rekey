@@ -13,6 +13,7 @@ let
     nameValuePair
     foldl'
     optionalAttrs
+    filterAttrs
     ;
 
   effectiveNixosConfigurations =
@@ -30,10 +31,10 @@ let
 
   findHomeManagerForHost =
     hostName: hostCfg:
-    if (hostCfg ? config.home-manager.users.age.rekey) then
-      (mapAttrs' (
-        name: value: nameValuePair "host-${hostName}-user-${name}" { config = value; }
-      ) hostCfg.config.home-manager.users)
+    if (hostCfg ? config.home-manager.users) then
+      mapAttrs' (name: value: nameValuePair "host-${hostName}-user-${name}" { config = value; }) (
+        filterAttrs (_: value: value ? age.rekey) hostCfg.config.home-manager.users
+      )
     else
       { };
 
