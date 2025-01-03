@@ -83,7 +83,7 @@ if you don't want to use the wrapper, which may be useful for use in your own sc
     };
 
     # Expose the necessary information in your flake so agenix-rekey
-    # knows where it has too look for secrets and paths.
+    # knows where it has to look for secrets and paths.
     #
     # Make sure that the pkgs passed here comes from the same nixpkgs version as
     # the pkgs used on your hosts in `nixosConfigurations`, otherwise the rekeyed
