@@ -151,10 +151,6 @@ Usage with flake-parts
 
 </details>
 
-You have the choice between two storage modes for your rekeyed secrets, which
-are fundamentally different from each other. You can freely switch between them,
-see [here]() for more information.
-
 ## Usage
 
 Since agenix-rekey is just an extension to agenix, everything you know about agenix still applies as usual.
@@ -410,33 +406,8 @@ agenix-rekey = agenix-rekey.configure {
 ## Storage Modes
 
 You have the choice between two storage modes for your rekeyed secrets, which
-are fundamentally different from each other. You can freely switch between them at any time.
-
-Option one is to store the rekeyed secrets locally in your repository (`local`), option two is to
-transparently store them in a derivation that will be created automatically (`derivation`).
-If in doubt use `local` which is more flexible and pure, but keep in mind that `derivation`
-can be more secure for certain cases. It uses more "magic" to hide some details and might be
-simpler to use if you only build on one host and don't care about remote building / CI.
-The choice depends on your organizational preferences and threat model.
-
-#### `derivation`
-
-Previously this was the default mode. All rekeyed secrets for each host will
-be collected in a derivation which copies them to the nix store when it is built using `agenix rekey`.
-
-- **Pro:** The entire process is stateless and rekeyed secrets are never committed to your repository.
-- **Con:** You cannot easily build your host from a CI/any host that hasn't access to your (yubi)key
-  except by manually uploading the derivations to the CI after rekeying.
-
-#### `local`
-
-All rekeyed secrets will be saved to a local folder in your flake when running `agenix rekey`.
-Agenix will use these local files directly, without requiring any extra derivations. This is the simpler
-approach and has less edge-cases.
-
-- **Pro:** System building stays pure, no need for sandbox shenanigans. -> System can be built without access to the (yubi)key.
-- **Con:** If your repository is public and one of your hosts is compromised, an attacker may decrypt
-  any secret that was ever encrypted for that host. This includes secrets that are in the git history.
+are fundamentally different from each other. You can freely switch between them,
+see [the option documentation](#agerekeystoragemode) for more information.
 
 ## How does it work?
 
