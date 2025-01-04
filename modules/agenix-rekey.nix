@@ -57,7 +57,7 @@ let
   dummySecret = pkgs.runCommand "generate-dummy-secret-${target}.age" { } ''
     ${getExe pkgs.rage} -e ${pubkeyOpt (removeSuffix "\n" config.age.rekey.hostPubkey)} -o "$out" <<EOF
     # This is a dummy secret.
-    # It was placed here because the original secret is an intermediary secrets.
+    # It was placed here because the original secret is an intermediary secret.
     EOF
   '';
 
