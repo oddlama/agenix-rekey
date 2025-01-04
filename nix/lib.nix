@@ -75,35 +75,48 @@ let
       }; do
         # Keep track if a file was processed.
         file_processed=false
+        age_plugin=""
+        prefix=""
+        pubkeys=()
 
         # Only consider files that contain exactly one identity, since files with multiple identities are allowed,
         # but are ambiguous with respect to the pairings between identities and pubkeys.
         if [[ $(grep -c "^AGE-" "$file") == 1 ]]; then
           if grep -q "^AGE-PLUGIN-YUBIKEY-" "$file"; then
-            # If the file specifies "Recipient: age1yubikey1<pubkey>", extract recipient and specify with "-r".
-            if mapfile -t pubkeys < <(grep 'Recipient: age1yubikey1' "$file" | grep -Eoh 'age1yubikey1[0-9a-z]+'); then
-              if [[ ''${#pubkeys[@]} -eq 0 ]]; then
-                error "Failed to find public key for master identity: $file"
-                error "If this is a keygrab, a comment should have been added by age-plugin-yubikey that seems to be missing here"
-                error "Please re-export the identity from age-plugin-yubikey or manually add the \"# Recipient: age1yubikey1<your_pubkey>\""
-                error "string in front of the key."
-                error "Alternatively, you can also specify the correct public key in \`config.age.rekey.masterIdentities\`."
-                exit 1
-              elif [[ ''${#pubkeys[@]} -eq 1 ]]; then
-                masterIdentityMap["''${pubkeys[0]}"]="$file"
-                masterIdentityArgs+=("-r" "''${pubkeys[0]}")
-                file_processed=true
-              else
-                error "Found more than one public key in master identity: $file"
-                error "agenix-rekey only supports a one-to-one correspondence between identities and their pubkeys."
-                error "If this is not intended, please avoid the \"# Recipient: \" comment in front of the incorrect key."
-                error "Alternatively, specify the correct public key in \`config.age.rekey.masterIdentities\`."
-                error "List of public keys found in the file:"
-                for pubkey in "''${pubkeys[@]}"; do
-                  error "  $pubkey"
-                done
-                exit 1
-              fi
+            age_plugin="age-plugin-yubikey"
+            prefix="Recipient: age1yubikey1"
+            # If the file specifies "Recipient: age1yubikey1<pubkey>", extract recipient
+            mapfile -t pubkeys < <(grep 'Recipient: age1yubikey1' "$file" | grep -Eoh 'age1yubikey1[0-9a-z]+')
+          elif grep -q "^AGE-PLUGIN-FIDO2-HMAC-" "$file"; then
+            age_plugin="age-plugin-fido2-hmac"
+            prefix="public key: age1"
+            # If the file specifies "public key: age1<pubkey>", extract public key
+            mapfile -t pubkeys < <(grep 'public key: age1' "$file" | grep -Eoh 'age1[0-9a-z]+')
+          fi
+
+          if [[ -n "$age_plugin" ]]; then
+            if [[ ''${#pubkeys[@]} -eq 0 ]]; then
+              error "Failed to find public key for master identity: $file"
+              error "If this is a keygrab, a comment should have been added by $age_plugin that seems to be missing here"
+              error "Please re-export the identity from $age_plugin or manually add the \"# $prefix<your_pubkey>\""
+              error "string in front of the key."
+              error "Alternatively, you can also specify the correct public key in \`config.age.rekey.masterIdentities\`."
+              exit 1
+            # If one key, specify recipient via -r
+            elif [[ ''${#pubkeys[@]} -eq 1 ]]; then
+              masterIdentityMap["''${pubkeys[0]}"]="$file"
+              masterIdentityArgs+=("-r" "''${pubkeys[0]}")
+              file_processed=true
+            else
+              error "Found more than one public key in master identity: $file"
+              error "agenix-rekey only supports a one-to-one correspondence between identities and their pubkeys."
+              error "If this is not intended, please avoid the \"# $prefix: \" comment in front of the incorrect key."
+              error "Alternatively, specify the correct public key in \`config.age.rekey.masterIdentities\`."
+              error "List of public keys found in the file:"
+              for pubkey in "''${pubkeys[@]}"; do
+                error "  $pubkey"
+              done
+              exit 1
             fi
           fi
         fi
