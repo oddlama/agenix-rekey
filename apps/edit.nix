@@ -44,6 +44,8 @@ pkgs.writeShellScriptBin "agenix-edit" ''
     echo '-h, --help                Show help'
     echo '-i, --input INFILE        Instead of editing FILE with $EDITOR, directly use the'
     echo '                            content of INFILE and encrypt it to FILE.'
+    echo '-f, --force               Always write out the file, regardless if the contents are unchanged.'
+    echo '                            Can be useful if you'"'"'re adding masterIdentities.'
     echo ""
     echo 'FILE    An age-encrypted file to edit or a new file to create.'
     echo '          If not given, a fzf selector of used secrets will be shown.'
@@ -54,6 +56,7 @@ pkgs.writeShellScriptBin "agenix-edit" ''
   fi
 
   POSITIONAL_ARGS=()
+  force=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       "help"|"--help"|"-help"|"-h")
@@ -64,6 +67,9 @@ pkgs.writeShellScriptBin "agenix-edit" ''
         INFILE="$2"
         [[ -f "$INFILE" ]] || die "Input file not found: '$INFILE'"
         shift
+        ;;
+      "--force"|"-f")
+        force=1
         ;;
       "--")
         shift
@@ -142,7 +148,7 @@ pkgs.writeShellScriptBin "agenix-edit" ''
   fi
 
   shasum_after="$(sha512sum "$CLEARTEXT_FILE")"
-  if [[ "$shasum_before" == "$shasum_after" ]]; then
+  if [[ "$force" == 0 && "$shasum_before" == "$shasum_after" ]]; then
     echo "No content changes, original is left unchanged."
     exit 0
   fi
