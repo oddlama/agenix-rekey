@@ -261,10 +261,10 @@ This agenix extension also works with FIDO2 keys instead of yubikeys, but you wi
 to adjust your setup a little (thanks to @Arbel-arad for pointing this out):
 
 - First you require a FIDO2 key that supports the `hmac-secret` extension, which you can check by running `fido2-token -I`
-- Add the necessary plugin by setting `age.rekey.agePlugins = [pkgs.age-plugin-fido2-hmac];`
-- Run `age-plugin-fido2-hmac -g` to generate credentials on your FIDO2 key
-- If it asks whether you want a separate identity file, pick yes. It will print the recipient address and keygrip.
-- Specify the keygrip identity file and provide the public key to agenix-rekey: `age.rekey.masterIdentities = [{ identity = ./mykey.hmac; pubkey = "age123456..."; }];`
+- Add the necessary plugin by setting `age.rekey.agePlugins = [pkgs.age-plugin-fido2-hmac];` (consider adding it to your devShell for convenience too).
+- Run `age-plugin-fido2-hmac -g > ./mykey.pub` to generate credentials on your FIDO2 key
+- When it asks whether you want a separate identity file, pick yes.
+- Specify the keygrip identity file and provide the public key to agenix-rekey: `age.rekey.masterIdentities = [ ./mykey.pub ];`
 
 ## Secret generation
 
