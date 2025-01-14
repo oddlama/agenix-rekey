@@ -73,17 +73,11 @@ let
         file = sourceFile;
         name = secretName;
         decrypt = ageMasterDecrypt;
-        deps = flip map secret.generator.dependencies (
-          dep:
-          assert assertMsg (
-            dep.generator != null
-          ) "The given dependency with rekeyFile=${dep.rekeyFile} is a secret without a generator.";
-          {
-            host = findHost dep;
-            name = dep.id;
-            file = relativeToFlake dep.rekeyFile;
-          }
-        );
+        deps = flip map secret.generator.dependencies (dep: {
+          host = findHost dep;
+          name = dep.id;
+          file = relativeToFlake dep.rekeyFile;
+        });
       };
     in
     # Filter secrets that don't need to be generated
@@ -159,7 +153,9 @@ let
       stages = flip mapAttrs secretsWithContext (
         _: contextSecret:
         stringsWithDeps.fullDepEntry (secretGenerationCommand contextSecret) (
-          map (x: relativeToFlake x.rekeyFile) contextSecret.secret.generator.dependencies
+          map (x: relativeToFlake x.rekeyFile) (
+            filter (dep: dep.generator != null) contextSecret.secret.generator.dependencies
+          )
         )
       );
     in
