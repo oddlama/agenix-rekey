@@ -220,7 +220,7 @@ in
       in
       optional (!all hasGoodSuffix masterIdentityPaths) ''
         At least one of your rekey.masterIdentities references an unencrypted age identity in your nix store!
-        ${concatMapStrings (x: "  - ${x}\n") (filter hasGoodSuffix masterIdentityPaths)}
+        ${concatMapStrings (x: "  - ${x}\n") (filter (x: !hasGoodSuffix x) masterIdentityPaths)}
 
         These files have already been copied to the nix store, and are now publicly readable!
         Please make sure they don't contain any secret information or delete them now.
