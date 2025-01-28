@@ -95,7 +95,12 @@ let
   generatorType = types.submodule (submod: {
     options = {
       dependencies = mkOption {
-        type = types.listOf types.unspecified;
+        type =
+          with types;
+          oneOf [
+            (listOf unspecified)
+            (attrsOf unspecified)
+          ];
         example = literalExpression ''[ config.age.secrets.basicAuthPw1 nixosConfigurations.machine2.config.age.secrets.basicAuthPw ]'';
         default = [ ];
         description = ''
@@ -104,7 +109,7 @@ let
           this secret is generated, allowing you use their outputs via the passed `decrypt` function.
 
           The given dependencies will be passed to the defined `script` via the `deps` parameter,
-          which will be a list of their true source locations (`rekeyFile`) in no particular order.
+          which will be a list or attrset of their true source locations (`rekeyFile`).
 
           This should refer only to secret definitions from `config.age.secrets` that
           have a generator. This is useful if you want to create derived secrets,
@@ -127,7 +132,7 @@ let
             file,    # The actual path to the .age file that will be written after
                      #   this function returns and the content is encrypted.
                      #   Useful to write additional information to adjacent files.
-            deps,    # The list of all secret files from our `dependencies`.
+            deps,    # The list or attrset of all secret files from our `dependencies`.
                      #   Each entry is a set of `{ name, host, file }`, corresponding to
                      #   the secret `nixosConfigurations.''${host}.age.secrets.''${name}`.
                      #   `file` is the true source location of the secret's `rekeyFile`.
