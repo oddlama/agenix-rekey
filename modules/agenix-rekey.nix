@@ -95,7 +95,12 @@ let
   generatorType = types.submodule (submod: {
     options = {
       dependencies = mkOption {
-        type = types.listOf types.unspecified;
+        type =
+          with types;
+          oneOf [
+            (listOf unspecified)
+            (attrsOf unspecified)
+          ];
         example = literalExpression ''[ config.age.secrets.basicAuthPw1 nixosConfigurations.machine2.config.age.secrets.basicAuthPw ]'';
         default = [ ];
         description = ''
