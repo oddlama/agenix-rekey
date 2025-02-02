@@ -17,6 +17,7 @@ writeShellScriptBin "agenix" ''
     echo '  rekey                   Re-encrypts secrets for hosts that require them.'
     echo '  edit                    Create/edit age secret files with $EDITOR and your master identity'
     echo '  generate                Automatically generates secrets that have generators'
+    echo '  update-masterkeys       Update all stored secrets with a new set of masterkeys'
     echo ""
     echo 'OPTIONS:'
     echo '  --show-trace            Show the trace for agenix-rekey.  This must be provided before the'

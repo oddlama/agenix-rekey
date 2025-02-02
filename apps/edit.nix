@@ -3,34 +3,15 @@ let
   inherit (pkgs.lib)
     concatStringsSep
     escapeShellArg
-    filter
-    hasPrefix
     optionalString
-    removePrefix
-    warn
     ;
 
   inherit (import ../nix/lib.nix inputs)
-    userFlakeDir
-    mergedSecrets
     ageMasterEncrypt
     ageMasterDecrypt
+    validRelativeSecretPaths
     ;
 
-  relativeToFlake =
-    filePath:
-    let
-      fileStr = builtins.unsafeDiscardStringContext (toString filePath);
-    in
-    if hasPrefix userFlakeDir fileStr then
-      "." + removePrefix userFlakeDir fileStr
-    else
-      warn "Ignoring ${fileStr} which isn't a direct subpath of the flake directory ${userFlakeDir}, meaning this script cannot determine it's true origin!" null;
-
-  # Relative path to all rekeyable secrets. Filters and warns on paths that are not part of the root flake.
-  validRelativeSecretPaths = builtins.sort (a: b: a < b) (
-    filter (x: x != null) (map relativeToFlake mergedSecrets)
-  );
 in
 pkgs.writeShellScriptBin "agenix-edit" ''
   set -uo pipefail
