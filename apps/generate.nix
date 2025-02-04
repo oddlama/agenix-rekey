@@ -19,6 +19,7 @@ let
     head
     length
     mapAttrs
+    mapAttrsToList
     removePrefix
     stringsWithDeps
     warnIf
@@ -38,6 +39,9 @@ let
     assert assertMsg (hasPrefix userFlakeDir fileStr)
       "Cannot generate ${fileStr} as it isn't a direct subpath of the flake directory ${userFlakeDir}, meaning this script cannot determine its true origin!";
     "." + removePrefix userFlakeDir fileStr;
+
+  mapListOrAttrs = f: x: if builtins.isList x then map f x else mapAttrs (_: f) x;
+  mapListOrAttrValues = f: x: if builtins.isList x then map f x else mapAttrsToList (_: f) x;
 
   # Finds the host where the given secret is defines. Matches
   # based on secret.id and secret.rekeyFile. If multiple matches
@@ -73,7 +77,7 @@ let
         file = sourceFile;
         name = secretName;
         decrypt = ageMasterDecrypt;
-        deps = flip map secret.generator.dependencies (dep: {
+        deps = flip mapListOrAttrs secret.generator.dependencies (dep: {
           host = findHost dep;
           name = dep.id;
           file = relativeToFlake dep.rekeyFile;
@@ -116,7 +120,7 @@ let
       dep_mtimes=(
         1 # Have at least one entry
         ${concatStringsSep "\n" (
-          flip map contextSecret.secret.generator.dependencies (
+          flip mapListOrAttrValues contextSecret.secret.generator.dependencies (
             dep: "\"$(stat -c %Y ${escapeShellArg (relativeToFlake dep.rekeyFile)} 2>/dev/null || echo 1)\""
           )
         )}
@@ -153,7 +157,7 @@ let
       stages = flip mapAttrs secretsWithContext (
         _: contextSecret:
         stringsWithDeps.fullDepEntry (secretGenerationCommand contextSecret) (
-          map (x: relativeToFlake x.rekeyFile) (
+          mapListOrAttrValues (x: relativeToFlake x.rekeyFile) (
             filter (dep: dep.generator != null) contextSecret.secret.generator.dependencies
           )
         )
