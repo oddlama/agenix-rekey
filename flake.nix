@@ -26,6 +26,7 @@
         "edit"
         "generate"
         "rekey"
+        "update-masterkeys"
       ];
     in
     inputs.flake-parts.lib.mkFlake { inherit inputs; } {

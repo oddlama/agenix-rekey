@@ -21,6 +21,7 @@ let
     "edit"
     "generate"
     "rekey"
+    "update-masterkeys"
   ];
 in
 {

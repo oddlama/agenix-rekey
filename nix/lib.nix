@@ -14,10 +14,13 @@ let
     escapeShellArg
     filter
     getExe
+    hasPrefix
     mapAttrsToList
+    removePrefix
     removeSuffix
     substring
     unique
+    warn
     ;
 
   # Collect rekeying options from all hosts
@@ -44,6 +47,22 @@ let
   extraEncryptionPubkeyArgs = concatStringsSep " " (map pubkeyOpt extraEncryptionPubkeys);
   # For decryption, we require access to all master identities
   decryptionMasterIdentityArgs = toIdentityArgs mergedMasterIdentities;
+
+  userFlakeDir = toString userFlake.outPath;
+  relativeToFlake =
+    filePath:
+    let
+      fileStr = builtins.unsafeDiscardStringContext (toString filePath);
+    in
+    if hasPrefix userFlakeDir fileStr then
+      "." + removePrefix userFlakeDir fileStr
+    else
+      warn "Ignoring ${fileStr} which isn't a direct subpath of the flake directory ${userFlakeDir}, meaning this script cannot determine it's true origin!" null;
+
+  # Relative path to all rekeyable secrets. Filters and warns on paths that are not part of the root flake.
+  validRelativeSecretPaths = builtins.sort (a: b: a < b) (
+    filter (x: x != null) (map relativeToFlake mergedSecrets)
+  );
 
   ageWrapperScript = pkgs.writeShellApplication {
     name = "ageWrapper";
@@ -165,7 +184,9 @@ let
   };
 in
 {
-  userFlakeDir = toString userFlake.outPath;
+  inherit userFlakeDir;
+  inherit relativeToFlake;
+  inherit validRelativeSecretPaths;
   inherit mergedSecrets;
 
   # Premade shell commands to encrypt and decrypt secrets.

@@ -41,6 +41,7 @@ There are several apps/subcommands which you can use to manage your secrets:
 - `agenix generate`: Generates any secrets that don't exist yet and have a generator set.
 - `agenix edit`: Create/edit secrets using `$EDITOR`. Can encrypt existing files.
 - `agenix rekey`: Rekeys secrets for hosts that require them.
+- `agenix update-masterkeys`: Rekeys secrets for a new set of masterkeys.
 - Use `agenix <command> --help` for specific usage information.
 
 The general workflow is quite simple, because you will automatically be prompted to
