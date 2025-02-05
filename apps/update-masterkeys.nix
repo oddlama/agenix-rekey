@@ -31,7 +31,7 @@ pkgs.writeShellScriptBin "agenix-update-masterkeys" ''
         CLEARTEXT_FILE=$(mktemp)
         ENCRYPTED_FILE=$(mktemp)
 
-        shasum_before="$(sha512sum "${path}")"}
+        shasum_before="$(sha512sum "${path}")"
 
         ${ageMasterDecrypt} -o "$CLEARTEXT_FILE" "${path}" \
             || die "Failed to decrypt file. Aborting."
