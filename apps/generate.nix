@@ -149,7 +149,7 @@ let
             || die "Failed to add generated secret to git"
         fi
       else
-        echo "[1;90m    Skipping[m [90m[already exists] "${escapeShellArg contextSecret.sourceFile}" ("${concatStringsSep "', '" (map escapeShellArg contextSecret.defs)}")[m"
+        echo "[1;90m    Skipping[m [90m[already exists] ${escapeShellArg contextSecret.sourceFile}: ${concatStringsSep ", " (map escapeShellArg contextSecret.defs)}[m"
       fi
     fi
   '';
