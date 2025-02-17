@@ -136,7 +136,12 @@ let
           ${contextSecret.script}
         ) || die "Generator exited with status $?."
 
-        ${ageMasterEncrypt} -o ${escapeShellArg contextSecret.sourceFile} <<< "$content" \
+        # Using printf might be less ergonomic than using <<< but <<< injects a
+        # newline.  Many systems or their NixOS modules read secret/password
+        # files literally (openldap, octoprint, and wireguard being some
+        # examples).  This means <<< mangles secrets for these systems.
+        printf '%s' "$content" \
+          | ${ageMasterEncrypt} -o ${escapeShellArg contextSecret.sourceFile} \
           || die "Failed to generate or encrypt secret."
 
         if [[ "$ADD_TO_GIT" == true ]]; then
