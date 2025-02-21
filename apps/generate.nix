@@ -132,16 +132,14 @@ let
       if [[ ! -e ${escapeShellArg contextSecret.sourceFile} ]] || [[ "$mtime_newest_dep" -gt "$mtime_this" ]] || [[ "$FORCE_GENERATE" == true ]]; then
         echo "[1;32m  Generating[m [34m"${escapeShellArg contextSecret.sourceFile}"[m [90m("${concatStringsSep "', '" (map escapeShellArg contextSecret.defs)}")[m"
         mkdir -p "$(dirname ${escapeShellArg contextSecret.sourceFile})"
-        content=$(
-          ${contextSecret.script}
-        ) || die "Generator exited with status $?."
 
-        # Using printf might be less ergonomic than using <<< but <<< injects a
-        # newline.  Many systems or their NixOS modules read secret/password
-        # files literally (openldap, octoprint, and wireguard being some
-        # examples).  This means <<< mangles secrets for these systems.
-        printf '%s' "$content" \
-          | ${ageMasterEncrypt} -o ${escapeShellArg contextSecret.sourceFile} \
+        {
+          (${contextSecret.script}) || {
+            rc="$?"
+            exec 1>&-
+            die "Generator exited with status $rc."
+          }
+        } | ${ageMasterEncrypt} -o ${escapeShellArg contextSecret.sourceFile} \
           || die "Failed to generate or encrypt secret."
 
         if [[ "$ADD_TO_GIT" == true ]]; then
