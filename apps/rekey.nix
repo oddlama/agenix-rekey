@@ -13,6 +13,7 @@ let
     filterAttrs
     flip
     hasPrefix
+    makeBinPath
     mapAttrsToList
     removePrefix
     ;
@@ -100,13 +101,15 @@ let
               else
                 rm ${secretOut}.tmp &>/dev/null || true
                 echo "[1;32m    Rekeying[m [90m"${escapeShellArg hostName}":[34m"${escapeShellArg secretName}"[m"
+                mkdir -p "$(dirname ${secretOut}.tmp)"
                 if ! decrypt ${escapeShellArg secret.rekeyFile} ${escapeShellArg secretName} ${escapeShellArg hostName} \
                   | ${ageHostEncrypt hostCfg} -o ${secretOut}.tmp; then
                   echo "[1;31mFailed to re-encrypt ${secret.rekeyFile} for ${hostName}![m" >&2
                 else
                   # Make sure to only create the result file if the rekeying was actually successful.
                   # If the first command in the pipe fails, we otherwise create a validly encrypted but empty secret
-                  mv ${secretOut}.tmp ${secretOut}
+                  install -D ${secretOut}.tmp ${secretOut}
+                  rm ${secretOut}.tmp &>/dev/null || true
                   any_rekeyed=true
                 fi
               fi
@@ -174,7 +177,8 @@ let
                 else
                   # Make sure to only create the result file if the rekeying was actually successful.
                   # If the first command in the pipe fails, we otherwise create a validly encrypted but empty secret
-                  mv "$SECRET_TMPFILE" ${escapeShellArg secretOut}
+                  install -D "$SECRET_TMPFILE" ${escapeShellArg secretOut}
+                  rm "$SECRET_TMPFILE" &>/dev/null || true
                 fi
               fi
             '';
@@ -192,12 +196,13 @@ let
           (
             REMOVED_ORPHANS=0
             shopt -s nullglob
-            for f in ${escapeShellArg hostRekeyDir}/*; do
+            while read -d $'\0' f; do
               if [[ "''${TRACKED_SECRETS["$f"]-false}" == false ]]; then
                 rm -- "$f" || true
                 REMOVED_ORPHANS=$((REMOVED_ORPHANS + 1))
               fi
-            done
+            done < <(find ${escapeShellArg hostRekeyDir} -type f -print0)
+            find ${escapeShellArg hostRekeyDir} -type d -empty -delete
             if [[ "''${REMOVED_ORPHANS}" -gt 0 ]]; then
               echo "[1;36m     Removed[m [0;33m''${REMOVED_ORPHANS} [0;36morphaned files for [32m"${escapeShellArg hostName}" [90min ${escapeShellArg hostRekeyDir}[m"
             fi
@@ -209,9 +214,16 @@ let
         '';
     }
     .${hostCfg.config.age.rekey.storageMode};
+
+  # Appended to the `PATH` environment variable.  Executables in the user's
+  # current environment take precedence over these; they are here only as
+  # backups in case the current environment lacks (e.g.) `nix`.
+  binPath = makeBinPath (with pkgs; [coreutils findutils nix]);
 in
 pkgs.writeShellScriptBin "agenix-rekey" ''
   set -euo pipefail
+
+  PATH="''${PATH:+"''${PATH}:"}"${escapeShellArg binPath}
 
   function die() { echo "[1;31merror:[m $*" >&2; exit 1; }
   function show_help() {
