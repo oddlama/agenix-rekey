@@ -12,6 +12,7 @@ let
     concatStringsSep
     escapeShellArg
     filter
+    filterAttrs
     flip
     foldl'
     hasAttr
@@ -42,6 +43,7 @@ let
 
   mapListOrAttrs = f: x: if builtins.isList x then map f x else mapAttrs (_: f) x;
   mapListOrAttrValues = f: x: if builtins.isList x then map f x else mapAttrsToList (_: f) x;
+  filterListOrAttrValues = f: x: if builtins.isList x then filter f x else filterAttrs (_: f) x;
 
   # Finds the host where the given secret is defines. Matches
   # based on secret.id and secret.rekeyFile. If multiple matches
@@ -161,7 +163,7 @@ let
         _: contextSecret:
         stringsWithDeps.fullDepEntry (secretGenerationCommand contextSecret) (
           mapListOrAttrValues (x: relativeToFlake x.rekeyFile) (
-            filter (dep: dep.generator != null) contextSecret.secret.generator.dependencies
+            filterListOrAttrValues (dep: dep.generator != null) contextSecret.secret.generator.dependencies
           )
         )
       );
