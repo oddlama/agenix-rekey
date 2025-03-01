@@ -10,9 +10,11 @@ let
     concatMapStrings
     concatStringsSep
     escapeShellArg
+    escapeShellArgs
     filterAttrs
     flip
     hasPrefix
+    makeBinPath
     mapAttrsToList
     removePrefix
     ;
@@ -98,16 +100,18 @@ let
               if [[ -e ${secretOut} ]] && [[ "$FORCE" != true ]]; then
                 echo "[1;90m    Skipping[m [90m[already rekeyed] "${escapeShellArg hostName}":"${escapeShellArg secretName}"[m"
               else
-                rm ${secretOut}.tmp &>/dev/null || true
                 echo "[1;32m    Rekeying[m [90m"${escapeShellArg hostName}":[34m"${escapeShellArg secretName}"[m"
-                if ! decrypt ${escapeShellArg secret.rekeyFile} ${escapeShellArg secretName} ${escapeShellArg hostName} \
-                  | ${ageHostEncrypt hostCfg} -o ${secretOut}.tmp; then
-                  echo "[1;31mFailed to re-encrypt ${secret.rekeyFile} for ${hostName}![m" >&2
-                else
-                  # Make sure to only create the result file if the rekeying was actually successful.
-                  # If the first command in the pipe fails, we otherwise create a validly encrypted but empty secret
-                  mv ${secretOut}.tmp ${secretOut}
+                if reencrypt ${
+                  escapeShellArgs [
+                    secretOut
+                    secret.rekeyFile
+                    secretName
+                    hostName
+                  ]
+                }; then
                   any_rekeyed=true
+                else
+                  echo "[1;31mFailed to re-encrypt ${secret.rekeyFile} for ${hostName}![m" >&2
                 fi
               fi
             '';
@@ -165,21 +169,26 @@ let
               if [[ -e ${escapeShellArg secretOut} ]] && [[ "$FORCE" != true ]]; then
                 echo "[1;90m    Skipping[m [90m[already rekeyed] "${escapeShellArg hostName}":"${escapeShellArg secretName}"[m"
               else
-                SECRET_TMPFILE=$(mktemp --dry-run /tmp/tmp.agenix-rekey.XXXXXXXXXX.age)
                 echo "[1;32m    Rekeying[m [90m"${escapeShellArg hostName}":[34m"${escapeShellArg secretName}"[m"
-                if ! decrypt ${escapeShellArg secret.rekeyFile} ${escapeShellArg secretName} ${escapeShellArg hostName} \
-                  | ${ageHostEncrypt hostCfg} -o "$SECRET_TMPFILE"; then
+                if ! reencrypt ${
+                  escapeShellArgs [
+                    secretOut
+                    secret.rekeyFile
+                    secretName
+                    hostName
+                  ]
+                }; then
                   echo "[1;31mFailed to re-encrypt ${secret.rekeyFile} for ${hostName}![m" >&2
-                  rm "$SECRET_TMPFILE" &>/dev/null || true
-                else
-                  # Make sure to only create the result file if the rekeying was actually successful.
-                  # If the first command in the pipe fails, we otherwise create a validly encrypted but empty secret
-                  mv "$SECRET_TMPFILE" ${escapeShellArg secretOut}
                 fi
               fi
             '';
         in
         ''
+          # Called in `reencrypt`
+          function encrypt() {
+            ${ageHostEncrypt hostCfg} "$@"
+          }
+
           # Create a set of tracked secrets so we can remove orphaned files afterwards
           unset TRACKED_SECRETS
           declare -A TRACKED_SECRETS
@@ -192,12 +201,13 @@ let
           (
             REMOVED_ORPHANS=0
             shopt -s nullglob
-            for f in ${escapeShellArg hostRekeyDir}/*; do
+            while read -d $'\0' f; do
               if [[ "''${TRACKED_SECRETS["$f"]-false}" == false ]]; then
                 rm -- "$f" || true
                 REMOVED_ORPHANS=$((REMOVED_ORPHANS + 1))
               fi
-            done
+            done < <(find ${escapeShellArg hostRekeyDir} -type f -print0)
+            find ${escapeShellArg hostRekeyDir} -type d -empty -delete
             if [[ "''${REMOVED_ORPHANS}" -gt 0 ]]; then
               echo "[1;36m     Removed[m [0;33m''${REMOVED_ORPHANS} [0;36morphaned files for [32m"${escapeShellArg hostName}" [90min ${escapeShellArg hostRekeyDir}[m"
             fi
@@ -209,9 +219,23 @@ let
         '';
     }
     .${hostCfg.config.age.rekey.storageMode};
+
+  # Appended to the `PATH` environment variable.  Executables in the user's
+  # current environment take precedence over these; they are here only as
+  # backups in case the current environment lacks (e.g.) `nix`.
+  binPath = makeBinPath (
+    with pkgs;
+    [
+      coreutils
+      findutils
+      nix
+    ]
+  );
 in
 pkgs.writeShellScriptBin "agenix-rekey" ''
   set -euo pipefail
+
+  export PATH="''${PATH:+"''${PATH}:"}"${escapeShellArg binPath}
 
   function die() { echo "[1;31merror:[m $*" >&2; exit 1; }
   function show_help() {
@@ -244,6 +268,54 @@ pkgs.writeShellScriptBin "agenix-rekey" ''
   function show_drv_paths() {
     true # in case list is empty
     ${concatMapStrings (x: "echo ${escapeShellArg (drvPathFor x)}\n") nodesWithDerivationStorage}
+  }
+
+  function encrypt() {
+    die "internal error: ''${FUNCNAME[0]:-encrypt} must be implemented on a per-host basis"
+  }
+
+  # Re-encrypt a secret file.  Requires the `encrypt` function to be defined to
+  # run an encrypting command appropriate for the target host.
+  #
+  # Features:
+  #
+  #   1. Creates secret files atomically by (a) writing the re-encrypted secret
+  #      into a temporary directory on the same filesystem as the final output
+  #      path and (b) moving the re-encrypted secret to its final output path
+  #      with `mv -f`.
+  #
+  #   2. Avoids the "unsafe" (quoth `man 1 mktemp`) `--dry-run` option to the
+  #      `mktemp` command, instead creating a temporary directory and writing
+  #      the re-encrypted secret to a file within that directory.
+  #
+  function reencrypt() {
+    local out="''${1?internal error}"
+    shift 2>/dev/null || :
+
+    local name="$(basename "$out")"
+    local dir="$(dirname "$out")"
+
+    mkdir -p "$dir" || return
+
+    local tmpdir
+    tmpdir="$(mktemp -d "''${dir}/.tmp.agenix-rekey.''${name}.XXXXXXXXXX")" || return
+
+    local tmp="''${tmpdir}/''${name}"
+
+    # Make sure to only create the result file if the rekeying was actually
+    # successful.  If the first command in the pipe fails, we otherwise create
+    # a validly encrypted but empty secret
+    decrypt "$@" | encrypt -o "$tmp" || {
+      local -i rc="$?"
+      rm -f "$tmp" || :
+      rmdir "$tmpdir" || echo "[1;31mFailed to remove temporary directory ''${tmpdir} after failing to re-encrypt secret ''${out}![m" >&2
+      return "$rc"
+    }
+
+    local -i rc=0
+    mv -f "$tmp" "$out" || rc="$?"
+    rmdir "$tmpdir" || echo "[1;31mFailed to remove temporary directory ''${tmpdir} after re-encrypting secret ''${out}![m" >&2
+    return "$rc"
   }
 
   DUMMY=false
