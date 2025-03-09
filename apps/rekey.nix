@@ -117,6 +117,11 @@ let
             '';
         in
         ''
+          # Called in `reencrypt`
+          function encrypt() {
+            ${ageHostEncrypt hostCfg} "$@"
+          }
+
           ANY_DERIVATION_MODE_HOSTS=true
           will_delete=false
           # Remove any existing rekeyed secrets from the nix store if --force was given
