@@ -2,6 +2,7 @@ nixpkgs:
 {
   lib,
   config,
+  options,
   pkgs,
   ...
 }:
@@ -353,8 +354,13 @@ in
             rekeyFile = mkOption {
               type = types.nullOr types.path;
               default =
-                if config.age.rekey.generatedSecretsDir != null then
-                  config.age.rekey.generatedSecretsDir + "/${submod.config.id}.age"
+                if submod.config.generator != null then
+                  if config.age.rekey.generatedSecretsDir != null then
+                    config.age.rekey.generatedSecretsDir + "/${submod.config.id}.age"
+                  else
+                    null
+                else if config.age.rekey.secretsDir != null then
+                  config.age.rekey.secretsDir + "/${submod.config.id}.age"
                 else
                   null;
               example = literalExpression "./secrets/password.age";
@@ -432,9 +438,19 @@ in
     };
 
     rekey = {
-      generatedSecretsDir = mkOption {
+      secretsDir = mkOption {
         type = types.nullOr types.path;
         default = null;
+        description = ''
+          The default parent path of **non**-generated secrets.  If set, this
+          automatically sets `age.secrets.<name>.rekeyFile` to a default value
+          in this directory for any secret that **does not** define a
+          generator.
+        '';
+      };
+
+      generatedSecretsDir = mkOption {
+        inherit (options.age.rekey.secretsDir) type default;
         description = ''
           The path where all generated secrets should be stored by default.
           If set, this automatically sets `age.secrets.<name>.rekeyFile` to a default
