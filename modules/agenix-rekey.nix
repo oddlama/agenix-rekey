@@ -450,7 +450,8 @@ in
       };
 
       generatedSecretsDir = mkOption {
-        inherit (options.age.rekey.secretsDir) type default;
+        type = types.nullOr types.path;
+        default = null;
         description = ''
           The path where all generated secrets should be stored by default.
           If set, this automatically sets `age.secrets.<name>.rekeyFile` to a default
