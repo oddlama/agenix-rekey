@@ -101,9 +101,9 @@ let
                 echo "[1;90m    Skipping[m [90m[already rekeyed] "${escapeShellArg hostName}":"${escapeShellArg secretName}"[m"
               else
                 echo "[1;32m    Rekeying[m [90m"${escapeShellArg hostName}":[34m"${escapeShellArg secretName}"[m"
-                if reencrypt ${
+                # Don't escape the out path as it could contain variables we want to expand
+                if reencrypt "${secretOut}" ${
                   escapeShellArgs [
-                    secretOut
                     secret.rekeyFile
                     secretName
                     hostName
