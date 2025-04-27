@@ -230,7 +230,7 @@ pkgs.writeShellScriptBin "agenix-generate" ''
       return 0
     else
       for secret in ''${POSITIONAL_ARGS[@]} ; do
-        [[ "$(realpath -m "$1")" == "$(realpath -m "$secret")" ]] && return 0
+        [[ "$(${pkgs.coreutils}/bin/realpath -m "$1")" == "$(${pkgs.coreutils}/bin/realpath -m "$secret")" ]] && return 0
       done
       # Calculate the number of common lines in the splitted tags. Make sure to always include
       # the empty line so TAGS="" $2="" doesn't produce false positives. If more than one line
@@ -250,7 +250,7 @@ pkgs.writeShellScriptBin "agenix-generate" ''
   )
   for secret in "''${POSITIONAL_ARGS[@]}" ; do
     for known in "''${KNOWN_SECRETS[@]}" ; do
-      [[ "$(realpath -m "$secret")" == "$(realpath -m "$known")" ]] && continue 2
+      [[ "$(${pkgs.coreutils}/bin/realpath -m "$secret")" == "$(${pkgs.coreutils}/bin/realpath -m "$known")" ]] && continue 2
     done
     die "Provided path matches no known secret: $secret"
   done

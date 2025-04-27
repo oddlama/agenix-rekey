@@ -3,6 +3,7 @@
   writeShellScriptBin,
   stdenv,
   allApps,
+  coreutils,
 }:
 writeShellScriptBin "agenix" ''
   set -euo pipefail
@@ -27,9 +28,9 @@ writeShellScriptBin "agenix" ''
 
   }
 
-  USER_GIT_TOPLEVEL=$(realpath -e "$(git rev-parse --show-toplevel 2>/dev/null || pwd)") \
+  USER_GIT_TOPLEVEL=$(${coreutils}/bin/realpath -e "$(git rev-parse --show-toplevel 2>/dev/null || pwd)") \
     || die "Could not determine current working directory. Something went very wrong."
-  USER_FLAKE_DIR=$(realpath -e "$(pwd)") \
+  USER_FLAKE_DIR=$(${coreutils}/bin/realpath -e "$(pwd)") \
     || die "Could not determine current working directory. Something went very wrong."
 
   # Search from $(pwd) upwards to $USER_GIT_TOPLEVEL until we find a flake.nix
