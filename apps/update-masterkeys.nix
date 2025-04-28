@@ -19,17 +19,17 @@ pkgs.writeShellScriptBin "agenix-update-masterkeys" ''
     die "Please execute this script from your flake's root directory."
   fi
 
-  function cleanup() {
-    [[ -e "$CLEARTEXT_FILE" ]] && rm "$CLEARTEXT_FILE"
-    [[ -e "$ENCRYPTED_FILE" ]] && rm "$ENCRYPTED_FILE"
-  }; trap "cleanup" EXIT
-
   ${builtins.concatStringsSep "" (
     builtins.map (
       path: # bash
       ''
         CLEARTEXT_FILE=$(${pkgs.coreutils}/bin/mktemp)
         ENCRYPTED_FILE=$(${pkgs.coreutils}/bin/mktemp)
+
+        function cleanup() {
+          [[ -e "$CLEARTEXT_FILE" ]] && rm "$CLEARTEXT_FILE"
+          [[ -e "$ENCRYPTED_FILE" ]] && rm "$ENCRYPTED_FILE"
+        }; trap "cleanup" EXIT
 
         shasum_before="$(${pkgs.coreutils}/bin/sha512sum "${path}")"
 
