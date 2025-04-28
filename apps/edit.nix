@@ -113,7 +113,7 @@ pkgs.writeShellScriptBin "agenix-edit" ''
   shasum_before="$(${pkgs.coreutils}/bin/sha512sum "$CLEARTEXT_FILE")"
 
   if [[ -n ''${INFILE+x} ]] ; then
-    cp "$INFILE" "$CLEARTEXT_FILE"
+    ${pkgs.coreutils}/bin/cp "$INFILE" "$CLEARTEXT_FILE"
   else
     # Editor options to prevent leaking information
     EDITOR_OPTS=()
@@ -136,7 +136,7 @@ pkgs.writeShellScriptBin "agenix-edit" ''
 
   ${ageMasterEncrypt} -o "$ENCRYPTED_FILE" "$CLEARTEXT_FILE" \
     || die "Failed to (re)encrypt edited file, original is left unchanged."
-  cp --no-preserve=all "$ENCRYPTED_FILE" "$FILE" # cp instead of mv preserves original attributes and permissions
+  ${pkgs.coreutils}/bin/cp --no-preserve=all "$ENCRYPTED_FILE" "$FILE" # cp instead of mv preserves original attributes and permissions
 
   exit 0
 ''
