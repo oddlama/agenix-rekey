@@ -28,17 +28,17 @@ pkgs.writeShellScriptBin "agenix-update-masterkeys" ''
     builtins.map (
       path: # bash
       ''
-        CLEARTEXT_FILE=$(mktemp)
-        ENCRYPTED_FILE=$(mktemp)
+        CLEARTEXT_FILE=$(${pkgs.coreutils}/bin/mktemp)
+        ENCRYPTED_FILE=$(${pkgs.coreutils}/bin/mktemp)
 
-        shasum_before="$(sha512sum "${path}")"
+        shasum_before="$(${pkgs.coreutils}/bin/sha512sum "${path}")"
 
         ${ageMasterDecrypt} -o "$CLEARTEXT_FILE" "${path}" \
             || die "Failed to decrypt file. Aborting."
         ${ageMasterEncrypt} -o "$ENCRYPTED_FILE" "$CLEARTEXT_FILE" \
             || die "Failed to re-encrypt file. Aborting."
 
-        shasum_after="$(sha512sum "$ENCRYPTED_FILE")"
+        shasum_after="$(${pkgs.coreutils}/bin/sha512sum "$ENCRYPTED_FILE")"
         if [[ "$shasum_before" == "$shasum_after" ]]; then
           echo "[1;90m    Skipping[m [90m[already rekeyed] "${path}"[m"
         else

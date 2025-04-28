@@ -93,8 +93,8 @@ pkgs.writeShellScriptBin "agenix-edit" ''
     SUFFIX="txt"
   fi
 
-  CLEARTEXT_FILE=$(mktemp --suffix=".$SUFFIX")
-  ENCRYPTED_FILE=$(mktemp --suffix=".$SUFFIX")
+  CLEARTEXT_FILE=$(${pkgs.coreutils}/bin/mktemp --suffix=".$SUFFIX")
+  ENCRYPTED_FILE=$(${pkgs.coreutils}/bin/mktemp --suffix=".$SUFFIX")
 
   function cleanup() {
     [[ -e "$CLEARTEXT_FILE" ]] && rm "$CLEARTEXT_FILE"
@@ -110,7 +110,7 @@ pkgs.writeShellScriptBin "agenix-edit" ''
     mkdir -p "$(dirname "$FILE")" \
       || die "Could not create parent directory"
   fi
-  shasum_before="$(sha512sum "$CLEARTEXT_FILE")"
+  shasum_before="$(${pkgs.coreutils}/bin/sha512sum "$CLEARTEXT_FILE")"
 
   if [[ -n ''${INFILE+x} ]] ; then
     cp "$INFILE" "$CLEARTEXT_FILE"
@@ -128,7 +128,7 @@ pkgs.writeShellScriptBin "agenix-edit" ''
       || die "Editor returned unsuccessful exit status. Aborting, original is left unchanged."
   fi
 
-  shasum_after="$(sha512sum "$CLEARTEXT_FILE")"
+  shasum_after="$(${pkgs.coreutils}/bin/sha512sum "$CLEARTEXT_FILE")"
   if [[ "$force" == 0 && "$shasum_before" == "$shasum_after" ]]; then
     echo "No content changes, original is left unchanged."
     exit 0

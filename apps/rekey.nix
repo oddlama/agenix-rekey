@@ -303,7 +303,7 @@ pkgs.writeShellScriptBin "agenix-rekey" ''
     mkdir -p "$dir" || return
 
     local tmpdir
-    tmpdir="$(mktemp -d "''${dir}/.tmp.agenix-rekey.''${name}.XXXXXXXXXX")" || return
+    tmpdir="$(${pkgs.coreutils}/bin/mktemp -d "''${dir}/.tmp.agenix-rekey.''${name}.XXXXXXXXXX")" || return
 
     local tmp="''${tmpdir}/''${name}"
 
