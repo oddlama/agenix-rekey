@@ -196,15 +196,15 @@ let
 
           # Create a set of tracked secrets so we can remove orphaned files afterwards
           unset TRACKED_SECRETS
-          declare -A TRACKED_SECRETS
+          declare -A TRACKED_SECRETS=() # the `=()` is required otherwise accessing the length fails with `unbound variable` 
 
           # Rekey secrets for ${hostName}
           mkdir -p ${hostRekeyDir}
           ${concatStringsSep "\n" (mapAttrsToList rekeyCommand secretsToRekey)}
 
           # Remove orphaned files
+          REMOVED_ORPHANS=0
           (
-            REMOVED_ORPHANS=0
             shopt -s nullglob
             while read -d $'\0' f; do
               if [[ "''${TRACKED_SECRETS["$f"]-false}" == false ]]; then
@@ -218,7 +218,7 @@ let
             fi
           )
 
-          if [[ "$ADD_TO_GIT" == true ]]; then
+          if [[ "$ADD_TO_GIT" == true && "''${#TRACKED_SECRETS[@]}" -gt 0 || "''${REMOVED_ORPHANS}" -gt 0 ]]; then
             git add ./${escapeShellArg hostRekeyDir}
           fi
         '';
