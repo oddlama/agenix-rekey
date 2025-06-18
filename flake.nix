@@ -81,6 +81,8 @@
               # Defaults to rage (pkgs.rage). We only guarantee compatibility for
               # pkgs.age and pkgs.rage.
               agePackage ? (p: p.rage),
+              # Arguments to append to the age decryption command
+              extraDecryptionArgs ? "",
               # The systems to generate apps for
               systems ? [
                 "x86_64-linux"
@@ -108,7 +110,7 @@
                       ;
                     inherit (pkgs') lib;
                   };
-                  inherit userFlake agePackage;
+                  inherit userFlake agePackage extraDecryptionArgs;
                   pkgs = pkgs';
                 }
               )
