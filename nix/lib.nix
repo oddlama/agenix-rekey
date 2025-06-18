@@ -3,6 +3,7 @@
   pkgs,
   nodes,
   agePackage,
+  extraDecryptionArgs,
   ...
 }:
 let
@@ -175,9 +176,9 @@ let
       else
         # Prepend primary key argument before all others to it gets the first attempt at decrypting.
         if [[ -n "''${AGENIX_REKEY_PRIMARY_IDENTITY:-}" ]] && [[ "''${AGENIX_REKEY_PRIMARY_IDENTITY_ONLY:-}" == true ]]; then
-          ${envPath} ${ageProgram} -d "''${primaryIdentityArgs[@]}" "''${@:2}"
+          ${envPath} ${ageProgram} -d ${extraDecryptionArgs} "''${primaryIdentityArgs[@]}" "''${@:2}"
         else
-          ${envPath} ${ageProgram} -d "''${primaryIdentityArgs[@]}" ${decryptionMasterIdentityArgs} "''${@:2}"
+          ${envPath} ${ageProgram} -d ${extraDecryptionArgs} "''${primaryIdentityArgs[@]}" ${decryptionMasterIdentityArgs} "''${@:2}"
         fi
       fi
     '';
