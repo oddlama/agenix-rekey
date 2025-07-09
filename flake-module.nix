@@ -82,17 +82,15 @@ in
           nixosConfigurations = mkOption {
             type = types.lazyAttrsOf types.unspecified;
             description = "All nixosSystems that should be considered for rekeying.";
-            default = self.nixosConfigurations;
-            defaultText = lib.literalExpression "self.nixosConfigurations";
+            default = lib.filterAttrs (_: x: x.config ? age) self.nixosConfigurations;
+            defaultText = lib.literalExpression "lib.filterAttrs (_: x: x.config ? age) self.nixosConfigurations";
           };
 
           homeConfigurations = mkOption {
             type = types.lazyAttrsOf types.unspecified;
             description = "All home manager configurations that should be considered for rekeying.";
-            default = { };
-            # XXX: in case home-manager gets flake-parts integration:
-            # default = self.homeConfigurations;
-            # defaultText = lib.literalExpression "self.homeConfigurations";
+            default = lib.filterAttrs (_: x: x.config ? age) self.homeConfigurations;
+            defaultText = lib.literalExpression "lib.filterAttrs (_: x: x.config ? age) self.homeConfigurations";
           };
 
           collectHomeManagerConfigurations = mkOption {
