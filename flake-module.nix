@@ -89,8 +89,8 @@ in
           homeConfigurations = mkOption {
             type = types.lazyAttrsOf types.unspecified;
             description = "All home manager configurations that should be considered for rekeying.";
-            default = lib.filterAttrs (_: x: x.config ? age) self.homeConfigurations;
-            defaultText = lib.literalExpression "lib.filterAttrs (_: x: x.config ? age) self.homeConfigurations";
+            default = lib.filterAttrs (_: x: x.config ? age) (self.homeConfigurations or { });
+            defaultText = lib.literalExpression "lib.filterAttrs (_: x: x.config ? age) (self.homeConfigurations or { })";
           };
 
           collectHomeManagerConfigurations = mkOption {
