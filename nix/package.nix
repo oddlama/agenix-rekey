@@ -11,11 +11,12 @@ writeShellScriptBin "agenix" ''
   function die() { echo "[1;31merror:[m $*" >&2; exit 1; }
   function show_help() {
     echo 'Usage: agenix <OPTIONS> [COMMAND]'
-    echo "Edit, generate or rekey secrets for agenix."
+    echo "View, edit, generate or rekey secrets for agenix."
     echo "Add help or --help to a subcommand to view a command specific help."
     echo ""
     echo 'COMMANDS:'
     echo '  rekey                   Re-encrypts secrets for hosts that require them.'
+    echo '  view                    Print age secret files to stdout with your master identity'
     echo '  edit                    Create/edit age secret files with $EDITOR and your master identity'
     echo '  generate                Automatically generates secrets that have generators'
     echo '  update-masterkeys       Update all stored secrets with a new set of masterkeys'
@@ -99,7 +100,9 @@ writeShellScriptBin "agenix" ''
     show_help
     exit 1
   fi
-  echo "Collecting information about hosts. This may take a while..."
+  if [[ "$APP" != "view" ]]; then
+    echo "Collecting information about hosts. This may take a while..."
+  fi
   exec nix run $SHOW_TRACE_ARG \
     ."$FLAKE_PARAMS"#agenix-rekey.${lib.escapeShellArg stdenv.hostPlatform.system}."$APP" \
      -- "''${PASS_THRU_ARGS[@]}"
