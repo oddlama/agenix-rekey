@@ -71,7 +71,7 @@ pkgs.writeShellScriptBin "agenix-edit" ''
         break
       ''}
       FILE=$(echo ${escapeShellArg (concatStringsSep "\n" validRelativeSecretPaths)} \
-        | ${pkgs.fzf}/bin/fzf --preview "bash -c 'agenix view {1}'" --tiebreak=end --bind=tab:down,btab:up,change:top --height='~50%' --tac --cycle --layout=reverse) \
+        | ${pkgs.fzf}/bin/fzf --preview "bash -c 'agenix view {1} 2> /dev/null'" --tiebreak=end --bind=tab:down,btab:up,change:top --height='~50%' --tac --cycle --layout=reverse) \
         || die "No file selected. Aborting."
     ;;
     1) FILE="''${POSITIONAL_ARGS[0]}" ;;
