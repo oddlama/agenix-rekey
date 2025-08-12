@@ -80,6 +80,11 @@ let
         secret.rekeyFile != null
       );
     in
+    if hostCfg.config.age.rekey.hostPubkey == "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3290gq" then
+    ''
+      echo "[1;90m    Skipping[m [90m[dummy hostPubkey] "${escapeShellArg hostName}"[m"
+    ''
+    else
     {
       derivation =
         let

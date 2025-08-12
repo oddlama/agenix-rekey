@@ -61,6 +61,12 @@ let
     # It was placed here because the original secret is an intermediary secret.
     EOF
   '';
+  placeholderSecret = pkgs.runCommand "generate-placeholder-secret-${target}.age" { } ''
+    ${getExe pkgs.rage} -e ${pubkeyOpt (removeSuffix "\n" config.age.rekey.hostPubkey)} -o "$out" <<EOF
+    # This is a placeholder secret.
+    # It was placed here because the host public key is of a dummy (placeholder) value.
+    EOF
+  '';
 
   rekeyedLocalSecret =
     secret:
@@ -77,7 +83,7 @@ let
           "Have you added it to git?";
 
       # Use builtins.path to make sure that we have a standalone copy of the subdirectory in the store.
-      # This is important to ensure that the path only changes if there are acutal changes to this
+      # This is important to ensure that the path only changes if there are actual changes to this
       # directory. If we were still using userFlake.outPath + "/secrets/[...]" or something similar,
       # then the path would change on each subsequent build because the flake path changes.
       rekeyedPath =
@@ -393,6 +399,9 @@ in
               if submod.config.intermediary then
                 # produce a dummy secret instead, unfortunately there is no way to omit it entirely in agenix as of Nov 2024.
                 dummySecret
+              else if config.age.rekey.hostPubkey == dummyPubkey then
+                # produce a placeholder secret, this is useful for first deployment, when the hostPubkey is not yet known/set.
+                placeholderSecret
               else if config.age.rekey.storageMode == "derivation" then
                 "${rekeyedSecrets}/${submod.config.name}.age"
               else
