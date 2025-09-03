@@ -42,7 +42,7 @@ pkgs.writeShellScriptBin "agenix-update-masterkeys" ''
         if [[ "$shasum_before" == "$shasum_after" ]]; then
           echo "[1;90m    Skipping[m [90m[already rekeyed] "${path}"[m"
         else
-          cp --no-preserve=all "$ENCRYPTED_FILE" "${path}" # cp instead of mv preserves original attributes and permissions
+          ${pkgs.coreutils}/bin/cp --no-preserve=all "$ENCRYPTED_FILE" "${path}" # cp instead of mv preserves original attributes and permissions
           echo "[1;32m    Updated masterkeys of[m [34m"${path}"[m"
         fi
 
