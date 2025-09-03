@@ -192,16 +192,16 @@ Usage with flake-utils-plus
         nixosConfigurations = self.nixosConfigurations;
       };
 
+      # OPTIONAL: This part is only needed if you want to have the agenix
+      # command in your devshell.
       sharedOverlays = [
         inputs.agenix-rekey.overlays.default
       ];
-
       outputsBuilder = channels: {
         devShell = channels.nixpkgs.mkShell {
           name = "default";
-          packages = [
-            channels.nixpkgs.agenix-rekey
-          ];
+          packages = [channels.nixpkgs.agenix-rekey];
+          # ...
         };
       };
     };
