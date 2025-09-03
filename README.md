@@ -181,17 +181,6 @@ Usage with flake-utils-plus
         agenix-rekey.nixosModules.default
       ];
 
-      # Expose the necessary information in your flake so agenix-rekey
-      # knows where it has to look for secrets and paths.
-      #
-      # Make sure that the pkgs passed here comes from the same nixpkgs version as
-      # the pkgs used on your hosts in `nixosConfigurations`, otherwise the rekeyed
-      # derivations will not be found!
-      hostDefaults.extraArgs.agenix-rekey = inputs.agenix-rekey.configure {
-        userFlake = self;
-        nixosConfigurations = self.nixosConfigurations;
-      };
-
       # OPTIONAL: This part is only needed if you want to have the agenix
       # command in your devshell.
       sharedOverlays = [
@@ -203,6 +192,18 @@ Usage with flake-utils-plus
           packages = [channels.nixpkgs.agenix-rekey];
           # ...
         };
+      };
+    }
+    // {
+      # Expose the necessary information in your flake so agenix-rekey
+      # knows where it has to look for secrets and paths.
+      #
+      # Make sure that the pkgs passed here comes from the same nixpkgs version as
+      # the pkgs used on your hosts in `nixosConfigurations`, otherwise the rekeyed
+      # derivations will not be found!
+      agenix-rekey = inputs.agenix-rekey.configure {
+        userFlake = self;
+        nixosConfigurations = self.nixosConfigurations;
       };
     };
 }
