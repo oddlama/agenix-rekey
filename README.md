@@ -150,6 +150,65 @@ Usage with flake-parts
 }
 ```
 
+<details>
+<summary>
+Usage with flake-utils-plus
+</summary>
+
+```nix
+{
+  inputs.utils.url = "github:gytis-ivaskevicius/flake-utils-plus";
+
+  inputs.agenix.url = "github:ryantm/agenix";
+  inputs.agenix-rekey.url = "github:oddlama/agenix-rekey";
+  # Make sure to override the nixpkgs version to follow your flake,
+  # otherwise derivation paths can mismatch (when using storageMode = "derivation"),
+  # resulting in the rekeyed secrets not being found!
+  inputs.agenix-rekey.inputs.nixpkgs.follows = "nixpkgs";
+  # ...
+
+  outputs = {
+    self,
+    utils,
+    ...
+  } @ inputs:
+    utils.lib.mkFlake {
+      inherit self inputs;
+
+      hostDefaults.modules = with inputs; [
+        ./configuration.nix
+        agenix.nixosModules.default
+        agenix-rekey.nixosModules.default
+      ];
+
+      # OPTIONAL: This part is only needed if you want to have the agenix
+      # command in your devshell.
+      sharedOverlays = [
+        inputs.agenix-rekey.overlays.default
+      ];
+      outputsBuilder = channels: {
+        devShell = channels.nixpkgs.mkShell {
+          name = "default";
+          packages = [channels.nixpkgs.agenix-rekey];
+          # ...
+        };
+      };
+    }
+    // {
+      # Expose the necessary information in your flake so agenix-rekey
+      # knows where it has to look for secrets and paths.
+      #
+      # Make sure that the pkgs passed here comes from the same nixpkgs version as
+      # the pkgs used on your hosts in `nixosConfigurations`, otherwise the rekeyed
+      # derivations will not be found!
+      agenix-rekey = inputs.agenix-rekey.configure {
+        userFlake = self;
+        nixosConfigurations = self.nixosConfigurations;
+      };
+    };
+}
+```
+
 </details>
 
 ## Usage
