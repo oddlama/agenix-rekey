@@ -136,7 +136,7 @@ let
         mkdir -p "$(dirname ${escapeShellArg contextSecret.sourceFile})"
 
         {
-          (${contextSecret.script}) || {
+          ( ${contextSecret.script} ) || {
             rc="$?"
             exec 1>&-
             die "Generator exited with status $rc."
