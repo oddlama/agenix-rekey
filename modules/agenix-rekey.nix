@@ -2,7 +2,6 @@ nixpkgs:
 {
   lib,
   config,
-  options,
   pkgs,
   ...
 }:
@@ -202,10 +201,6 @@ in
         {
           assertion = config.age.rekey.masterIdentities != [ ];
           message = "rekey.masterIdentities must be set.";
-        }
-        {
-          assertion = all isAbsolutePath masterIdentityPaths;
-          message = "All masterIdentities must be referred to by an absolute path, but (${filter isAbsolutePath masterIdentityPaths}) is not.";
         }
       ]
       ++ flatten (

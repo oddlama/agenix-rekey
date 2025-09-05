@@ -34,8 +34,7 @@ let
 
   isAbsolutePath = x: substring 0 1 x == "/";
   pubkeyOpt = x: if isAbsolutePath x then "-R ${escapeShellArg x}" else "-r ${escapeShellArg x}";
-  toIdentityArgs =
-    identities: concatStringsSep " " (map (x: "-i ${escapeShellArg x.identity}") identities);
+  toIdentityArgs = identities: concatStringsSep " " (map (x: "-i ${x.identity}") identities);
 
   ageProgram = getExe (agePackage pkgs);
   # Collect all paths to enabled age plugins
@@ -77,20 +76,17 @@ let
       declare -A masterIdentityMap
       # Master identities that have a pubkey can be added without further treatment.
       ${concatStringsSep "\n" (
-        map (
-          x:
-          ''masterIdentityMap[${escapeShellArg (removeSuffix "\n" x.pubkey)}]=${escapeShellArg x.identity}''
-        ) (filter (x: x.pubkey != null) mergedMasterIdentities)
+        map (x: ''masterIdentityMap[${escapeShellArg (removeSuffix "\n" x.pubkey)}]=${x.identity}'') (
+          filter (x: x.pubkey != null) mergedMasterIdentities
+        )
       )}
 
       # For master identies with no explicit pubkey, try extracting a pubkey from the file first.
       # Collect final identity arguments for encryption in an array.
       masterIdentityArgs=()
-      # shellcheck disable=SC2041,SC2043
+      # shellcheck disable=SC2041,SC2043,SC2086
       for file in ${
-        concatStringsSep " " (
-          map (x: "${escapeShellArg x.identity}") (filter (x: x.pubkey == null) mergedMasterIdentities)
-        )
+        concatStringsSep " " (map (x: x.identity) (filter (x: x.pubkey == null) mergedMasterIdentities))
       }; do
         # Keep track if a file was processed.
         file_processed=false
@@ -177,7 +173,9 @@ let
         if [[ -n "''${AGENIX_REKEY_PRIMARY_IDENTITY:-}" ]] && [[ "''${AGENIX_REKEY_PRIMARY_IDENTITY_ONLY:-}" == true ]]; then
           ${envPath} ${ageProgram} -d "''${primaryIdentityArgs[@]}" "''${@:2}"
         else
-          ${envPath} ${ageProgram} -d "''${primaryIdentityArgs[@]}" ${decryptionMasterIdentityArgs} "''${@:2}"
+          # splitting args is intentional here, files with spaces must be quoted by the user
+          extraArgs=(${decryptionMasterIdentityArgs})
+          ${envPath} ${ageProgram} -d "''${primaryIdentityArgs[@]}" "''${extraArgs[@]}" "''${@:2}"
         fi
       fi
     '';
