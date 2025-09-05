@@ -39,6 +39,7 @@ This is a replacement for the command provided by agenix, which you won't need a
 There are several apps/subcommands which you can use to manage your secrets:
 
 - `agenix generate`: Generates any secrets that don't exist yet and have a generator set.
+- `agenix view`: View secrets using fzf.
 - `agenix edit`: Create/edit secrets using `$EDITOR`. Can encrypt existing files.
 - `agenix rekey`: Rekeys secrets for hosts that require them.
 - `agenix update-masterkeys`: Rekeys secrets for a new set of masterkeys.
