@@ -80,155 +80,158 @@ let
         secret.rekeyFile != null
       );
     in
-    if hostCfg.config.age.rekey.hostPubkey == "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3290gq" then
-    ''
-      echo "[1;90m    Skipping[m [90m[dummy hostPubkey] "${escapeShellArg hostName}"[m"
-    ''
+    if
+      hostCfg.config.age.rekey.hostPubkey
+      == "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3290gq"
+    then
+      ''
+        echo "[1;90m    Skipping[m [90m[dummy hostPubkey] "${escapeShellArg hostName}"[m"
+      ''
     else
-    {
-      derivation =
-        let
-          # The derivation containing the resulting rekeyed secrets
-          rekeyedSecrets = derivationFor hostCfg;
+      {
+        derivation =
+          let
+            # The derivation containing the resulting rekeyed secrets
+            rekeyedSecrets = derivationFor hostCfg;
 
-          # The resulting store path for this host's rekeyed secrets
-          outPath = escapeShellArg (outPathFor hostCfg);
-          # The builder which we can use to realise the derivation
-          drvPath = escapeShellArg (drvPathFor hostCfg);
+            # The resulting store path for this host's rekeyed secrets
+            outPath = escapeShellArg (outPathFor hostCfg);
+            # The builder which we can use to realise the derivation
+            drvPath = escapeShellArg (drvPathFor hostCfg);
 
-          rekeyCommand =
-            secretName: secret:
-            let
-              secretOut = rekeyedSecrets.cachePathFor secret;
-            in
-            ''
-              if [[ -e ${secretOut} ]] && [[ "$FORCE" != true ]]; then
-                echo "[1;90m    Skipping[m [90m[already rekeyed] "${escapeShellArg hostName}":"${escapeShellArg secretName}"[m"
-              else
-                echo "[1;32m    Rekeying[m [90m"${escapeShellArg hostName}":[34m"${escapeShellArg secretName}"[m"
-                # Don't escape the out path as it could contain variables we want to expand
-                if reencrypt "${secretOut}" ${
-                  escapeShellArgs [
-                    secret.rekeyFile
-                    secretName
-                    hostName
-                  ]
-                }; then
-                  any_rekeyed=true
+            rekeyCommand =
+              secretName: secret:
+              let
+                secretOut = rekeyedSecrets.cachePathFor secret;
+              in
+              ''
+                if [[ -e ${secretOut} ]] && [[ "$FORCE" != true ]]; then
+                  echo "[1;90m    Skipping[m [90m[already rekeyed] "${escapeShellArg hostName}":"${escapeShellArg secretName}"[m"
                 else
-                  echo "[1;31mFailed to re-encrypt ${secret.rekeyFile} for ${hostName}![m" >&2
+                  echo "[1;32m    Rekeying[m [90m"${escapeShellArg hostName}":[34m"${escapeShellArg secretName}"[m"
+                  # Don't escape the out path as it could contain variables we want to expand
+                  if reencrypt "${secretOut}" ${
+                    escapeShellArgs [
+                      secret.rekeyFile
+                      secretName
+                      hostName
+                    ]
+                  }; then
+                    any_rekeyed=true
+                  else
+                    echo "[1;31mFailed to re-encrypt ${secret.rekeyFile} for ${hostName}![m" >&2
+                  fi
                 fi
-              fi
-            '';
-        in
-        ''
-          # Called in `reencrypt`
-          function encrypt() {
-            ${ageHostEncrypt hostCfg} "$@"
-          }
+              '';
+          in
+          ''
+            # Called in `reencrypt`
+            function encrypt() {
+              ${ageHostEncrypt hostCfg} "$@"
+            }
 
-          ANY_DERIVATION_MODE_HOSTS=true
-          will_delete=false
-          # Remove any existing rekeyed secrets from the nix store if --force was given
-          if [[ -e ${outPath} && ( "$FORCE" == true || ! -e ${outPath}/success ) ]]; then
-            echo "[1;31m     Marking[m [31mexisting store path of [33m"${escapeShellArg hostName}"[31m for deletion [90m("${outPath}")[m"
-            STORE_PATHS_TO_DELETE+=(${outPath})
-            will_delete=true
-          fi
-
-          any_rekeyed=false
-          # Rekey secrets for ${hostName}
-          mkdir -p ${rekeyedSecrets.cacheDir}/secrets
-          ${concatStringsSep "\n" (mapAttrsToList rekeyCommand secretsToRekey)}
-
-          # We need to save the rekeyed output when any secret was rekeyed, or when the
-          # output derivation doesn't exist (it could have been removed manually).
-          if [[ "$any_rekeyed" == true || ! -e ${outPath} || "$will_delete" == true ]]; then
-            SANDBOX_PATHS[${rekeyedSecrets.cacheDir}]=1
-            [[ ${rekeyedSecrets.cacheDir} =~ [[:space:]] ]] \
-              && die "The path to the rekeyed secret cannot contain spaces (i.e. neither cacheDir nor name) due to a limitation of nix --extra-sandbox-paths."
-            DRVS_TO_BUILD+=(${drvPath}'^*')
-          fi
-        '';
-      local =
-        let
-          relativeToFlake =
-            filePath:
-            let
-              fileStr = builtins.unsafeDiscardStringContext (toString filePath);
-            in
-            if hasPrefix userFlakeDir fileStr then
-              "." + removePrefix userFlakeDir fileStr
-            else
-              throw "Cannot determine true origin of ${fileStr} which doesn't seem to be a direct subpath of the flake directory ${userFlakeDir}. Did you make sure to specify `age.rekey.localStorageDir` relative to the root of your flake?";
-
-          hostRekeyDir = relativeToFlake hostCfg.config.age.rekey.localStorageDir;
-          rekeyCommand =
-            secretName: secret:
-            let
-              pubkeyHash = builtins.hashString "sha256" hostCfg.config.age.rekey.hostPubkey;
-              identHash = builtins.substring 0 32 (
-                builtins.hashString "sha256" (pubkeyHash + builtins.hashFile "sha256" secret.rekeyFile)
-              );
-              secretOut = "${hostRekeyDir}/${identHash}-${secret.name}.age";
-            in
-            ''
-              # Mark secret as known
-              TRACKED_SECRETS[${escapeShellArg secretOut}]=true
-
-              if [[ -e ${escapeShellArg secretOut} ]] && [[ "$FORCE" != true ]]; then
-                echo "[1;90m    Skipping[m [90m[already rekeyed] "${escapeShellArg hostName}":"${escapeShellArg secretName}"[m"
-              else
-                echo "[1;32m    Rekeying[m [90m"${escapeShellArg hostName}":[34m"${escapeShellArg secretName}"[m"
-                if ! reencrypt ${
-                  escapeShellArgs [
-                    secretOut
-                    secret.rekeyFile
-                    secretName
-                    hostName
-                  ]
-                }; then
-                  echo "[1;31mFailed to re-encrypt ${secret.rekeyFile} for ${hostName}![m" >&2
-                fi
-              fi
-            '';
-        in
-        ''
-          # Called in `reencrypt`
-          function encrypt() {
-            ${ageHostEncrypt hostCfg} "$@"
-          }
-
-          # Create a set of tracked secrets so we can remove orphaned files afterwards
-          unset TRACKED_SECRETS
-          declare -A TRACKED_SECRETS=() # the `=()` is required otherwise accessing the length fails with `unbound variable` 
-
-          # Rekey secrets for ${hostName}
-          mkdir -p ${hostRekeyDir}
-          ${concatStringsSep "\n" (mapAttrsToList rekeyCommand secretsToRekey)}
-
-          # Remove orphaned files
-          REMOVED_ORPHANS=0
-          (
-            shopt -s nullglob
-            while read -d $'\0' f; do
-              if [[ "''${TRACKED_SECRETS["$f"]-false}" == false ]]; then
-                rm -- "$f" || true
-                REMOVED_ORPHANS=$((REMOVED_ORPHANS + 1))
-              fi
-            done < <(find ${escapeShellArg hostRekeyDir} -type f -print0)
-            find ${escapeShellArg hostRekeyDir} -type d -empty -delete
-            if [[ "''${REMOVED_ORPHANS}" -gt 0 ]]; then
-              echo "[1;36m     Removed[m [0;33m''${REMOVED_ORPHANS} [0;36morphaned files for [32m"${escapeShellArg hostName}" [90min ${escapeShellArg hostRekeyDir}[m"
+            ANY_DERIVATION_MODE_HOSTS=true
+            will_delete=false
+            # Remove any existing rekeyed secrets from the nix store if --force was given
+            if [[ -e ${outPath} && ( "$FORCE" == true || ! -e ${outPath}/success ) ]]; then
+              echo "[1;31m     Marking[m [31mexisting store path of [33m"${escapeShellArg hostName}"[31m for deletion [90m("${outPath}")[m"
+              STORE_PATHS_TO_DELETE+=(${outPath})
+              will_delete=true
             fi
-          )
 
-          if [[ "$ADD_TO_GIT" == true && "''${#TRACKED_SECRETS[@]}" -gt 0 || "''${REMOVED_ORPHANS}" -gt 0 ]]; then
-            git add ./${escapeShellArg hostRekeyDir}
-          fi
-        '';
-    }
-    .${hostCfg.config.age.rekey.storageMode};
+            any_rekeyed=false
+            # Rekey secrets for ${hostName}
+            mkdir -p ${rekeyedSecrets.cacheDir}/secrets
+            ${concatStringsSep "\n" (mapAttrsToList rekeyCommand secretsToRekey)}
+
+            # We need to save the rekeyed output when any secret was rekeyed, or when the
+            # output derivation doesn't exist (it could have been removed manually).
+            if [[ "$any_rekeyed" == true || ! -e ${outPath} || "$will_delete" == true ]]; then
+              SANDBOX_PATHS[${rekeyedSecrets.cacheDir}]=1
+              [[ ${rekeyedSecrets.cacheDir} =~ [[:space:]] ]] \
+                && die "The path to the rekeyed secret cannot contain spaces (i.e. neither cacheDir nor name) due to a limitation of nix --extra-sandbox-paths."
+              DRVS_TO_BUILD+=(${drvPath}'^*')
+            fi
+          '';
+        local =
+          let
+            relativeToFlake =
+              filePath:
+              let
+                fileStr = builtins.unsafeDiscardStringContext (toString filePath);
+              in
+              if hasPrefix userFlakeDir fileStr then
+                "." + removePrefix userFlakeDir fileStr
+              else
+                throw "Cannot determine true origin of ${fileStr} which doesn't seem to be a direct subpath of the flake directory ${userFlakeDir}. Did you make sure to specify `age.rekey.localStorageDir` relative to the root of your flake?";
+
+            hostRekeyDir = relativeToFlake hostCfg.config.age.rekey.localStorageDir;
+            rekeyCommand =
+              secretName: secret:
+              let
+                pubkeyHash = builtins.hashString "sha256" hostCfg.config.age.rekey.hostPubkey;
+                identHash = builtins.substring 0 32 (
+                  builtins.hashString "sha256" (pubkeyHash + builtins.hashFile "sha256" secret.rekeyFile)
+                );
+                secretOut = "${hostRekeyDir}/${identHash}-${secret.name}.age";
+              in
+              ''
+                # Mark secret as known
+                TRACKED_SECRETS[${escapeShellArg secretOut}]=true
+
+                if [[ -e ${escapeShellArg secretOut} ]] && [[ "$FORCE" != true ]]; then
+                  echo "[1;90m    Skipping[m [90m[already rekeyed] "${escapeShellArg hostName}":"${escapeShellArg secretName}"[m"
+                else
+                  echo "[1;32m    Rekeying[m [90m"${escapeShellArg hostName}":[34m"${escapeShellArg secretName}"[m"
+                  if ! reencrypt ${
+                    escapeShellArgs [
+                      secretOut
+                      secret.rekeyFile
+                      secretName
+                      hostName
+                    ]
+                  }; then
+                    echo "[1;31mFailed to re-encrypt ${secret.rekeyFile} for ${hostName}![m" >&2
+                  fi
+                fi
+              '';
+          in
+          ''
+            # Called in `reencrypt`
+            function encrypt() {
+              ${ageHostEncrypt hostCfg} "$@"
+            }
+
+            # Create a set of tracked secrets so we can remove orphaned files afterwards
+            unset TRACKED_SECRETS
+            declare -A TRACKED_SECRETS=() # the `=()` is required otherwise accessing the length fails with `unbound variable` 
+
+            # Rekey secrets for ${hostName}
+            mkdir -p ${hostRekeyDir}
+            ${concatStringsSep "\n" (mapAttrsToList rekeyCommand secretsToRekey)}
+
+            # Remove orphaned files
+            REMOVED_ORPHANS=0
+            (
+              shopt -s nullglob
+              while read -d $'\0' f; do
+                if [[ "''${TRACKED_SECRETS["$f"]-false}" == false ]]; then
+                  rm -- "$f" || true
+                  REMOVED_ORPHANS=$((REMOVED_ORPHANS + 1))
+                fi
+              done < <(find ${escapeShellArg hostRekeyDir} -type f -print0)
+              find ${escapeShellArg hostRekeyDir} -type d -empty -delete
+              if [[ "''${REMOVED_ORPHANS}" -gt 0 ]]; then
+                echo "[1;36m     Removed[m [0;33m''${REMOVED_ORPHANS} [0;36morphaned files for [32m"${escapeShellArg hostName}" [90min ${escapeShellArg hostRekeyDir}[m"
+              fi
+            )
+
+            if [[ "$ADD_TO_GIT" == true && "''${#TRACKED_SECRETS[@]}" -gt 0 || "''${REMOVED_ORPHANS}" -gt 0 ]]; then
+              git add ./${escapeShellArg hostRekeyDir}
+            fi
+          '';
+      }
+      .${hostCfg.config.age.rekey.storageMode};
 
   # Appended to the `PATH` environment variable.  Executables in the user's
   # current environment take precedence over these; they are here only as
