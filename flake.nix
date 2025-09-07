@@ -23,7 +23,7 @@
     inputs:
     let
       allApps = [
-        "edit"
+        "edit-view"
         "generate"
         "rekey"
         "update-masterkeys"
