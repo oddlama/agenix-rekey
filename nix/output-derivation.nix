@@ -68,7 +68,7 @@ appHostPkgs.stdenv.mkDerivation (
 
         function ensure_exists() {
           [[ -e "$1" ]] || {
-            echo "[1;31mAt least one rekeyed secret is missing, please run \`agenix rekey\` again.[m" >&2
+            echo "[1;31mAt least one rekeyed secret is missing, please ensure the sandbox can access the cacheDir and run \`agenix rekey\` again.[m" >&2
             echo "[90m  rekeyed secret: $1[m" >&2
             exit 1
           }

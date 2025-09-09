@@ -301,9 +301,10 @@ to use rekeying is to specify `rekeyFile` instead of `file` on your secrets. The
     Don't forget to add the rekeyed secrets afterwards to make them visible to the build process.
 
     > [!WARNING]
-    > If you use `storageMode = "derivation"`, `agenix rekey` must be able to set extra
-    > sandbox paths. This you need to add `age.rekey.cacheDir` as a global extra sandbox path
-    > (DO NOT add your user to trusted-users instead, this would basically grant them root access!):
+    > If you use `storageMode = "derivation"` with sandboxing enabled and your store connection is untrusted,
+    > you need to configure `age.rekey.cacheDir` as an extra sandbox path in the **build machine's Nix daemon configuration**.
+    > A client-side setting in your user's `nix.conf` is not sufficient.
+    > See [Sandbox Access](#sandbox-access) for a full explanation
     >
     > ```nix
     > nix.settings.extra-sandbox-paths = ["/tmp/agenix-rekey.${config.users.users.youruser.uid}"];
@@ -320,6 +321,22 @@ to use rekeying is to specify `rekeyFile` instead of `file` on your secrets. The
     > to your remote systems will work automatically, so no additional care has to be taken.
     > Only when you strictly build on your remotes, you might have to copy those secrets manually.
     > You can target them by using `agenix rekey --show-out-paths` or by directly referring to `nixosConfigurations.<host>.config.age.rekey.derivation`
+
+## Sandbox access
+
+With `storageMode = "derivation"`, `agenix rekey` builds a derivation that copies already rekeyed secrets from `age.rekey.cacheDir` into the Nix store.
+To do so it needs access to the `cacheDir` from within the sandbox.
+The simplest option is to add the executing user to the nix daemons `trusted-users` This allow `agenix rekey` to add the necessary sandbox-paths itself.
+However we *heavily* discourage this, as any user that is trusted can effectively gain root acces, through the nix daemon, only do this if you are root
+anyway or allow trivial access to root.
+The other slightly more involved solution is adding the `extra-sandbox-paths` to the nix config yourself:
+```nix
+nix.settings.extra-sandbox-paths = ["/tmp/agenix-rekey.${config.users.users.youruser.uid}"];
+```
+(with `youruser` being the user running `agenix rekey`)
+
+To prevent unnecessary warning `agenix` will not try setting the `extra-sandbox-paths` option itself if it detects you are not trusted.
+In this case running `agenix rekey` will throw an error, and you should set the necessary options.
 
 ## Using a FIDO2 key instead of a YubiKey
 
@@ -645,20 +662,18 @@ in the nix-store, which we want to achieve without requiring you to track them i
 `agenix-rekey` solves the impurity problem by following a two-step approach. By adding
 agenix-rekey, you implicitly define a script through your flake which can run in your
 host-environment and is thus able to prompt for passwords or read YubiKeys.
-It can run `age` to rekey the secrets and store them in a temporary cache directory.
+It can run `age` to rekey the secrets and store them in a cache directory.
 
 #### Predicting store paths to avoid tracking rekeyed secrets
 
-The more complicated second problem is solved by using a predictable store-path for
-the resulting rekeyed secrets by putting them in a special derivation for each host.
-This derivation is made to always fail when the build is invoked transitively by the
-build process, which always means rekeying is necessary.
+Prediction store path has two possible solutions see [the option documentation](#agerekeystoragemode).
+Using `local` the cache directory is your local flake, in which case they can be accesed by your
+built cofiguration like any other checked in file.
 
-The `agenix rekey` command will build the same derivation but with special access to the rekeyed
-secrets which will temporarily be stored in a predicable path in `/tmp`, for which
-the sandbox is allowed access to `/tmp` solving the impurity issue. Running the build
-afterwards will succeed since the derivation is now already built and available in
-your local store.
+When using `derivation` mode the cache directory is a predicable path in `/tmp`, for which
+the sandbox needs to be allowed access. The `agenix rekey` command will then build a secret derivation,
+effectively copying the secrets into the store, from where the host can acces them.
+See the [Sandboxing section](#sandbox-access) for necessary setup.
 
 # ❄️ Module options
 
