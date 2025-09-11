@@ -881,3 +881,6 @@ The description of [pull request #28](https://github.com/oddlama/agenix-rekey/pu
 If this environment variable is set to `true`, agenix-rekey will only ever try to decrypt with
 the identity given by `AGENIX_REKEY_PRIMARY_IDENTITY`. This is useful in cases where at least one
 of the other configured master identities is always physically available or in other ways inaccessible.
+
+# Testing
+Testing is implemented in a separate subflake. See [this README](./tests/README.md).
