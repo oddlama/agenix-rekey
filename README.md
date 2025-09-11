@@ -151,6 +151,8 @@ Usage with flake-parts
 }
 ```
 
+</details>
+
 <details>
 <summary>
 Usage with flake-utils-plus
