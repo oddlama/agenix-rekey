@@ -229,7 +229,7 @@ pkgs.writeShellScriptBin "agenix-generate" ''
     if [[ ''${#POSITIONAL_ARGS[@]} -eq 0 ]] && [[ -z "$TAGS" ]]; then
       return 0
     else
-      for secret in ''${POSITIONAL_ARGS[@]} ; do
+      for secret in "''${POSITIONAL_ARGS[@]}" ; do
         [[ "$(${pkgs.coreutils}/bin/realpath -m "$1")" == "$(${pkgs.coreutils}/bin/realpath -m "$secret")" ]] && return 0
       done
       # Calculate the number of common lines in the splitted tags. Make sure to always include
@@ -277,7 +277,7 @@ pkgs.writeShellScriptBin "agenix-generate" ''
         rm -- "$f" || true
         REMOVED_ORPHANS=$((REMOVED_ORPHANS + 1))
         if [[ "$ADD_TO_GIT" == true ]]; then
-          git add $f
+          git add "$f"
         fi
       fi
     done
