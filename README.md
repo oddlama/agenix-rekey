@@ -486,6 +486,33 @@ This can be easier to deal with than lists in some cases.
 }
 ```
 
+Secrets that only serve as input to further generators can be marked as intermediary by setting the same-named attribute to `true`.
+On the host, they are then replaced by dummy files, i.e., the secret itself is not decrypted.
+This is especially useful, if consumers of the secret only need a hash of a password which you are generating in a second secret: by setting `intermediary = true`, the password itself is not visible on the deployed system.
+
+```nix
+{
+  age.secrets.some-password = {
+    rekeyFile = ./secrets/password.age;
+    generator.script = "alnum";
+    intermediary = true;
+  };
+
+  # Calculate the hash
+  age.secrets.pwd-hash = {
+    rekeyFile = ./secrets/pwd-hash.age;
+    generator = {
+      dependencies = [ config.age.secrets.some-password ];
+      script = { pkgs, lib, decrypt, deps, ... }: ''
+        ${decrypt} ${lib.escapeShellArg (lib.head deps).file} | \
+            ${pkgs.openssl}/bin/openssl passwd -6 -stdin
+      '';
+    };
+  };
+}
+```
+
+
 ## Using age instead of rage
 
 If you don't want to use rage for some reason, you can specify a compatible
@@ -559,6 +586,16 @@ is mutually exclusive with specifying `file` directly.
 
 If you want to avoid having a `secrets.nix` file and only use rekeyed secrets,
 you should always use this option instead of `file`.
+
+## `age.secrets.<name>.intermediary`
+
+| Type    | `bool` |
+|-----|-----|
+| Default | `false` |
+| Example | `true` |
+
+Whether the secret is only required as an intermediary/repository secret and 
+should not be uploaded and decrypted on the host.
 
 ## `age.secrets.<name>.generator`
 
