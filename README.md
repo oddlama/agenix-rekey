@@ -358,7 +358,7 @@ the example below would generate a random 6 word passphrase using the
   [Diffie-Hellman_parameters](https://wiki.openssl.org/index.php/Diffie-Hellman_parameters)
   for details.
 - `ssh-ed25519` - Generates a [ED-25519](https://en.wikipedia.org/wiki/EdDSA)
-  SSH key pair using the current hostname.
+  SSH private key, setting the current hostname and name of the secret as comment.
 
 ### Custom generators
 
