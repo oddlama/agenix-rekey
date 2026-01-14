@@ -1,5 +1,9 @@
 {
   inputs = {
+    flake-compat = {
+     url = "github:NixOS/flake-compat";
+     flake = false;
+    };
     devshell = {
       url = "github:numtide/devshell";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -32,6 +36,7 @@
     inputs.flake-parts.lib.mkFlake { inherit inputs; } {
       imports = [
         inputs.devshell.flakeModule
+        inputs.flake-compat.flakeModule
         inputs.flake-parts.flakeModules.easyOverlay
         inputs.flake-parts.flakeModules.flakeModules
         inputs.pre-commit-hooks.flakeModule
