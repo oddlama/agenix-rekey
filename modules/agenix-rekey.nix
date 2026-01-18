@@ -238,7 +238,7 @@ in
           - Or encrypt your age identity and use the extension `.age`. You can encrypt an age identity
             using `rage -p -o privkey.age privkey` which protects it in your store.
       ''
-      ++ optional (config.age.rekey.hostPubkey == dummyPubkey) ''
+      ++ optional (config.age.secrets != { } && config.age.rekey.hostPubkey == dummyPubkey) ''
         You have not yet specified rekey.hostPubkey for your host ${target}.
         All secrets for this host will be rekeyed with a dummy key, resulting in an activation failure.
 
