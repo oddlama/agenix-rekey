@@ -348,7 +348,11 @@ in
               default = false;
               description = ''
                 Whether the secret is only required as an intermediary/repository
-                secret and should not be uploaded and decrypted on the host.
+                secret and should not be rekeyed or decrypted on the host.
+                Intermediary secrets are not encrypted with the host's key,
+                ensuring they cannot be decrypted even by a root user with
+                access to the host's private key. A dummy file is placed on
+                the host to satisfy agenix.
               '';
             };
 
