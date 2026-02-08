@@ -59,7 +59,7 @@
             default = config.nixosModules.agenix-rekey;
           };
           homeManagerModules = {
-            inherit (config.nixosModules) agenix-rekey;
+            agenix-rekey = import ./modules/agenix-rekey.nix inputs.nixpkgs;
             default = config.homeManagerModules.agenix-rekey;
           };
 
