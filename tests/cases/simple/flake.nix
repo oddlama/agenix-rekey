@@ -76,9 +76,34 @@
         ];
       };
 
+      darwinConfigurations.host-darwin = inputs.darwin.lib.darwinSystem {
+        system = "aarch64-darwin";
+        modules = [
+          inputs.agenix.darwinModules.default
+          inputs.agenix-rekey.darwinModules.default
+          (
+            { config, ... }:
+            {
+              networking.hostName = "host-darwin";
+              age.rekey = {
+                hostPubkey = ./host.pub;
+                masterIdentities = [ ./key.txt ];
+                storageMode = "local";
+                localStorageDir = ./. + "/secrets/rekeyed/${config.networking.hostName}";
+              };
+
+              age.secrets.secret.rekeyFile = ./secret.age;
+            }
+          )
+        ];
+      };
+
       agenix-rekey = inputs.agenix-rekey.configure {
         userFlake = self;
-        inherit (self) nixosConfigurations;
+        inherit (self)
+          nixosConfigurations
+          darwinConfigurations
+          ;
       };
     }
     // inputs.flake-utils.lib.eachDefaultSystem (system: rec {

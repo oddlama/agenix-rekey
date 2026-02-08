@@ -51,7 +51,7 @@ run `agenix rekey` whenever it is necessary (the build will fail and tell you).
 ## Installation
 
 To use agenix-rekey, you will have to add agenix-rekey to your `flake.nix`,
-import the provided NixOS module in your hosts and expose some information
+import the provided NixOS/darwin module in your hosts and expose some information
 in your flake so agenix-rekey knows where to look for secrets. A [flake-parts](https://flake.parts)
 module is also available (see end of this section for an example).
 
@@ -88,11 +88,12 @@ if you don't want to use the wrapper, which may be useful for use in your own sc
     # knows where it has to look for secrets and paths.
     #
     # Make sure that the pkgs passed here comes from the same nixpkgs version as
-    # the pkgs used on your hosts in `nixosConfigurations`, otherwise the rekeyed
+    # the pkgs used on your hosts in `nixosConfigurations`/`darwinConfigurations`, otherwise the rekeyed
     # derivations will not be found!
     agenix-rekey = agenix-rekey.configure {
       userFlake = self;
       nixosConfigurations = self.nixosConfigurations;
+      darwinConfigurations = self.darwinConfigurations or { };
       # Example for colmena:
       # nixosConfigurations = ((colmena.lib.makeHive self.colmena).introspect (x: x)).nodes;
     };
@@ -142,10 +143,11 @@ Usage with flake-parts
           nativeBuildInputs = [ config.agenix-rekey.package ];
         };
 
-        # You can define agenix-rekey.nixosConfigurations if you want to change which
+        # You can define agenix-rekey.nixosConfigurations / agenix-rekey.darwinConfigurations if you want to change which
         # hosts are considered for rekeying.
         # Refer to the flake.parts section on agenix-rekey to see all available options.
         agenix-rekey.nixosConfigurations = inputs.self.nixosConfigurations; # (not technically needed, as it is already the default)
+        agenix-rekey.darwinConfigurations = inputs.self.darwinConfigurations; # (not technically needed, as it is already the default)
       };
     };
 }
@@ -202,11 +204,12 @@ Usage with flake-utils-plus
       # knows where it has to look for secrets and paths.
       #
       # Make sure that the pkgs passed here comes from the same nixpkgs version as
-      # the pkgs used on your hosts in `nixosConfigurations`, otherwise the rekeyed
+      # the pkgs used on your hosts in `nixosConfigurations`/`darwinConfigurations`, otherwise the rekeyed
       # derivations will not be found!
       agenix-rekey = inputs.agenix-rekey.configure {
         userFlake = self;
         nixosConfigurations = self.nixosConfigurations;
+        darwinConfigurations = self.darwinConfigurations or { };
       };
     };
 }
@@ -382,7 +385,7 @@ can use to define our generation script.
 | `lib`     | Convenience access to the nixpkgs library |
 | `pkgs`    | The package set for the _host that is running the generation script_. Don't use any other packgage set in the script! |
 | `file`    | The actual path to the .age file that will be written after this function returns and the content is encrypted. Useful to write additional information to adjacent files. |
-| `deps`    | The list or attrset of all secret files from our `dependencies`. Each entry is a set of `{ name, host, file }`, corresponding to the secret `nixosConfigurations.${host}.age.secrets.${name}`. `file` is the true source location of the secret's `rekeyFile`. You can extract the plaintext with `${decrypt} ${escapeShellArg dep.file}`.
+| `deps`    | The list or attrset of all secret files from our `dependencies`. Each entry is a set of `{ name, host, file }`, corresponding to the secret `<hostConfigurations>.${host}.age.secrets.${name}`. `file` is the true source location of the secret's `rekeyFile`. You can extract the plaintext with `${decrypt} ${escapeShellArg dep.file}`.
 | `decrypt` | The base rage command that can decrypt secrets to stdout by using the defined `masterIdentities`.
 | `...`     | For future/unused arguments
 
@@ -428,7 +431,8 @@ which are also generated automatically:
       # All these secrets will be generated first and their paths are
       # passed to the `script` as `deps` when this secret is being generated.
       # You can refer to age secrets of other systems, as long as all relevant systems
-      # are passed to the agenix-rekey app definition via the nixosConfigurations parameter.
+      # are passed to the agenix-rekey app definition via the nixosConfigurations and/or
+      # darwinConfigurations parameters.
       dependencies = [
         # A local secret
         config.age.secrets.basic-auth-pw
@@ -611,7 +615,7 @@ If defined, this generator will be used to bootstrap this secret's when it doesn
 | Type    | `oneOf [(listOf unspecified) (attrsOf unspecified)]` |
 |-----|-----|
 | Default | `[]` |
-| Example | `[ config.age.secrets.basicAuthPw1 nixosConfigurations.machine2.config.age.secrets.basicAuthPw ]` or `{ inherit (config.age.secrets) smtpPassword; }` |
+| Example | `[ config.age.secrets.basicAuthPw1 darwinConfigurations.machine2.config.age.secrets.basicAuthPw ]` or `{ inherit (config.age.secrets) smtpPassword; }` |
 
 Other secrets on which this secret depends. This guarantees that in the final
 `agenix generate` script, all dependencies will be generated before
@@ -625,7 +629,7 @@ have a generator. This is useful if you want to create derived secrets,
 such as generating a .htpasswd file from several basic auth passwords.
 
 You can refer to age secrets of other systems, as long as all relevant systems
-are passed to the agenix-rekey app definition via the nixosConfigurations parameter.
+are passed to the agenix-rekey app definition via the `nixosConfigurations` and/or `darwinConfigurations` parameters.
 
 ## `age.secrets.<name>.generator.script`
 

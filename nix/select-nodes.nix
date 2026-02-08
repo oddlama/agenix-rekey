@@ -2,6 +2,7 @@
   lib,
   nodes ? { },
   nixosConfigurations,
+  darwinConfigurations ? { },
   homeConfigurations,
   collectHomeManagerConfigurations,
   ...
@@ -38,9 +39,10 @@ let
     else
       { };
 
-  listNixosConfigsWithHomeManager = mapAttrsToList findHomeManagerForHost effectiveNixosConfigurations;
-  hmConfigsInsideNixosConfiguration = foldl' lib.mergeAttrs { } listNixosConfigsWithHomeManager;
+  effectiveHostConfigurations = effectiveNixosConfigurations // darwinConfigurations;
+  listHostConfigsWithHomeManager = mapAttrsToList findHomeManagerForHost effectiveHostConfigurations;
+  hmConfigsInsideHostConfiguration = foldl' lib.mergeAttrs { } listHostConfigsWithHomeManager;
 in
-effectiveNixosConfigurations
+effectiveHostConfigurations
 // homeConfigurations
-// optionalAttrs collectHomeManagerConfigurations hmConfigsInsideNixosConfiguration
+// optionalAttrs collectHomeManagerConfigurations hmConfigsInsideHostConfiguration

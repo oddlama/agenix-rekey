@@ -37,6 +37,7 @@ in
               nodes = import ./nix/select-nodes.nix {
                 inherit (config'.agenix-rekey)
                   nixosConfigurations
+                  darwinConfigurations
                   homeConfigurations
                   collectHomeManagerConfigurations
                   ;
@@ -84,6 +85,13 @@ in
             description = "All nixosSystems that should be considered for rekeying.";
             default = lib.filterAttrs (_: x: x.config ? age) self.nixosConfigurations;
             defaultText = lib.literalExpression "lib.filterAttrs (_: x: x.config ? age) self.nixosConfigurations";
+          };
+
+          darwinConfigurations = mkOption {
+            type = types.lazyAttrsOf types.unspecified;
+            description = "All darwinSystems that should be considered for rekeying.";
+            default = lib.filterAttrs (_: x: x.config ? age) (self.darwinConfigurations or { });
+            defaultText = lib.literalExpression "lib.filterAttrs (_: x: x.config ? age) (self.darwinConfigurations or { })";
           };
 
           homeConfigurations = mkOption {

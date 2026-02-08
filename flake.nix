@@ -58,6 +58,11 @@
             agenixRekey = config.nixosModules.agenix-rekey; # backward compat
             default = config.nixosModules.agenix-rekey;
           };
+          darwinModules = {
+            agenix-rekey = import ./modules/agenix-rekey.nix inputs.nixpkgs;
+            agenixRekey = config.darwinModules.agenix-rekey; # backward compat
+            default = config.darwinModules.agenix-rekey;
+          };
           homeManagerModules = {
             inherit (config.nixosModules) agenix-rekey;
             default = config.homeManagerModules.agenix-rekey;
@@ -70,6 +75,7 @@
               userFlake,
               # Configurations where agenix-rekey will search for attributes
               nixosConfigurations ? { },
+              darwinConfigurations ? { },
               homeConfigurations ? { },
               collectHomeManagerConfigurations ? true,
               # Legacy alias for nixosConfigurations see https://github.com/oddlama/agenix-rekey/pull/51
@@ -103,6 +109,7 @@
                     inherit
                       nodes
                       nixosConfigurations
+                      darwinConfigurations
                       homeConfigurations
                       collectHomeManagerConfigurations
                       ;
