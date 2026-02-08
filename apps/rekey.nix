@@ -40,6 +40,15 @@ let
     hostCfg: toString (derivationFor hostCfg).outPath;
   drvPathFor =
     hostCfg: toString (derivationFor hostCfg).drvPath;
+  relativeToFlake =
+    filePath:
+    let
+      fileStr = toString filePath;
+    in
+    if hasPrefix userFlakeDir fileStr then
+      "." + removePrefix userFlakeDir fileStr
+    else
+      throw "Cannot determine true origin of ${fileStr} which doesn't seem to be a direct subpath of the flake directory ${userFlakeDir}.";
 
   nodesWithDerivationStorage = attrValues (
     filterAttrs (
@@ -156,16 +165,6 @@ let
           '';
         local =
           let
-            relativeToFlake =
-              filePath:
-              let
-                fileStr = toString filePath;
-              in
-              if hasPrefix userFlakeDir fileStr then
-                "." + removePrefix userFlakeDir fileStr
-              else
-                throw "Cannot determine true origin of ${fileStr} which doesn't seem to be a direct subpath of the flake directory ${userFlakeDir}. Did you make sure to specify `age.rekey.localStorageDir` relative to the root of your flake?";
-
             hostRekeyDir = relativeToFlake hostCfg.config.age.rekey.localStorageDir;
             rekeyCommand =
               secretName: secret:
