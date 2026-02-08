@@ -37,9 +37,9 @@ let
   # Returns the outPath/drvPath for the secrets of a given host, without
   # triggering a build of the derivation.
   outPathFor =
-    hostCfg: builtins.unsafeDiscardStringContext (toString (derivationFor hostCfg).outPath);
+    hostCfg: toString (derivationFor hostCfg).outPath;
   drvPathFor =
-    hostCfg: builtins.unsafeDiscardStringContext (toString (derivationFor hostCfg).drvPath);
+    hostCfg: toString (derivationFor hostCfg).drvPath;
 
   nodesWithDerivationStorage = attrValues (
     filterAttrs (
@@ -103,6 +103,7 @@ let
               secretName: secret:
               let
                 secretOut = rekeyedSecrets.cachePathFor secret;
+                secretSource = relativeToFlake secret.rekeyFile;
               in
               ''
                 if [[ -e ${secretOut} ]] && [[ "$FORCE" != true ]]; then
@@ -112,14 +113,14 @@ let
                   # Don't escape the out path as it could contain variables we want to expand
                   if reencrypt "${secretOut}" ${
                     escapeShellArgs [
-                      secret.rekeyFile
+                      secretSource
                       secretName
                       hostName
                     ]
                   }; then
                     any_rekeyed=true
                   else
-                    echo "[1;31mFailed to re-encrypt ${secret.rekeyFile} for ${hostName}![m" >&2
+                    echo "[1;31mFailed to re-encrypt ${secretSource} for ${hostName}![m" >&2
                   fi
                 fi
               '';
@@ -158,7 +159,7 @@ let
             relativeToFlake =
               filePath:
               let
-                fileStr = builtins.unsafeDiscardStringContext (toString filePath);
+                fileStr = toString filePath;
               in
               if hasPrefix userFlakeDir fileStr then
                 "." + removePrefix userFlakeDir fileStr
@@ -173,6 +174,7 @@ let
                 identHash = builtins.substring 0 32 (
                   builtins.hashString "sha256" (pubkeyHash + builtins.hashFile "sha256" secret.rekeyFile)
                 );
+                secretSource = relativeToFlake secret.rekeyFile;
                 secretOut = "${hostRekeyDir}/${identHash}-${secret.name}.age";
               in
               ''
@@ -186,12 +188,12 @@ let
                   if ! reencrypt ${
                     escapeShellArgs [
                       secretOut
-                      secret.rekeyFile
+                      secretSource
                       secretName
                       hostName
                     ]
                   }; then
-                    echo "[1;31mFailed to re-encrypt ${secret.rekeyFile} for ${hostName}![m" >&2
+                    echo "[1;31mFailed to re-encrypt ${secretSource} for ${hostName}![m" >&2
                   fi
                 fi
               '';

@@ -35,7 +35,7 @@ let
   relativeToFlake =
     filePath:
     let
-      fileStr = builtins.unsafeDiscardStringContext (toString filePath);
+      fileStr = toString filePath;
     in
     assert assertMsg (hasPrefix userFlakeDir fileStr)
       "Cannot generate ${fileStr} as it isn't a direct subpath of the flake directory ${userFlakeDir}, meaning this script cannot determine its true origin!";

@@ -51,7 +51,7 @@ let
   relativeToFlake =
     filePath:
     let
-      fileStr = builtins.unsafeDiscardStringContext (toString filePath);
+      fileStr = toString filePath;
     in
     if hasPrefix userFlakeDir fileStr then
       "." + removePrefix userFlakeDir fileStr
