@@ -67,6 +67,7 @@
                 hostPubkey = ./host.pub;
                 masterIdentities = [ ./key.txt ];
                 storageMode = "derivation";
+                cacheDir = "/tmp/agenix-rekey-test-cache";
                 forceRekeyOnSystem = pkgs.stdenv.hostPlatform.system;
               };
 
