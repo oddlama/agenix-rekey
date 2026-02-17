@@ -385,7 +385,7 @@ can use to define our generation script.
 | `lib`     | Convenience access to the nixpkgs library |
 | `pkgs`    | The package set for the _host that is running the generation script_. Don't use any other packgage set in the script! |
 | `file`    | The actual path to the .age file that will be written after this function returns and the content is encrypted. Useful to write additional information to adjacent files. |
-| `deps`    | The list or attrset of all secret files from our `dependencies`. Each entry is a set of `{ name, host, file }`, corresponding to the secret `<hostConfigurations>.${host}.age.secrets.${name}`. `file` is the true source location of the secret's `rekeyFile`. You can extract the plaintext with `${decrypt} ${escapeShellArg dep.file}`.
+| `deps`    | The list or attrset of all secret files from our `dependencies`. Each entry is a set of `{ name, host, file }`, corresponding to either `nixosConfigurations.${host}.age.secrets.${name}` or `darwinConfigurations.${host}.age.secrets.${name}`. `file` is the true source location of the secret's `rekeyFile`. You can extract the plaintext with `${decrypt} ${escapeShellArg dep.file}`.
 | `decrypt` | The base rage command that can decrypt secrets to stdout by using the defined `masterIdentities`.
 | `...`     | For future/unused arguments
 
@@ -615,7 +615,7 @@ If defined, this generator will be used to bootstrap this secret's when it doesn
 | Type    | `oneOf [(listOf unspecified) (attrsOf unspecified)]` |
 |-----|-----|
 | Default | `[]` |
-| Example | `[ config.age.secrets.basicAuthPw1 darwinConfigurations.machine2.config.age.secrets.basicAuthPw ]` or `{ inherit (config.age.secrets) smtpPassword; }` |
+| Example | `[ config.age.secrets.basicAuthPw1 nixosConfigurations.machine2.config.age.secrets.basicAuthPw ]` or `{ inherit (config.age.secrets) smtpPassword; }` |
 
 Other secrets on which this secret depends. This guarantees that in the final
 `agenix generate` script, all dependencies will be generated before

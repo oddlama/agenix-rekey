@@ -60,7 +60,6 @@
           };
           darwinModules = {
             agenix-rekey = import ./modules/agenix-rekey.nix inputs.nixpkgs;
-            agenixRekey = config.darwinModules.agenix-rekey; # backward compat
             default = config.darwinModules.agenix-rekey;
           };
           homeManagerModules = {

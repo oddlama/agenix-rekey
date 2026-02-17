@@ -107,7 +107,7 @@ let
             (listOf unspecified)
             (attrsOf unspecified)
           ];
-        example = literalExpression ''[ config.age.secrets.basicAuthPw1 darwinConfigurations.machine2.config.age.secrets.basicAuthPw ]'';
+        example = literalExpression ''[ config.age.secrets.basicAuthPw1 nixosConfigurations.machine2.config.age.secrets.basicAuthPw ]'';
         default = [ ];
         description = ''
           Other secrets on which this secret depends. This guarantees that in the final
@@ -140,7 +140,8 @@ let
                      #   Useful to write additional information to adjacent files.
             deps,    # The list or attrset of all secret files from our `dependencies`.
                      #   Each entry is a set of `{ name, host, file }`, corresponding to
-                     #   the secret `<hostConfigurations>.''${host}.age.secrets.''${name}`.
+                     #   either `nixosConfigurations.''${host}.age.secrets.''${name}` or
+                     #   `darwinConfigurations.''${host}.age.secrets.''${name}`.
                      #   `file` is the true source location of the secret's `rekeyFile`.
                      #   You can extract the plaintext with `''${decrypt} ''${escapeShellArg dep.file}`.
             decrypt, # The base rage command that can decrypt secrets to stdout by

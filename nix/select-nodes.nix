@@ -2,7 +2,7 @@
   lib,
   nodes ? { },
   nixosConfigurations,
-  darwinConfigurations ? { },
+  darwinConfigurations,
   homeConfigurations,
   collectHomeManagerConfigurations,
   ...
