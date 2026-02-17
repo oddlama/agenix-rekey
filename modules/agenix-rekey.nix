@@ -140,8 +140,9 @@ let
                      #   Useful to write additional information to adjacent files.
             deps,    # The list or attrset of all secret files from our `dependencies`.
                      #   Each entry is a set of `{ name, host, file }`, corresponding to
-                     #   either `nixosConfigurations.''${host}.age.secrets.''${name}` or
-                     #   `darwinConfigurations.''${host}.age.secrets.''${name}`.
+                     #   either `nixosConfigurations.<host>.age.secrets.''${name}` or
+                     #   `darwinConfigurations.<host>.age.secrets.''${name}`.
+                     #   `host` is always namespaced as `nixos:<host>` or `darwin:<host>`.
                      #   `file` is the true source location of the secret's `rekeyFile`.
                      #   You can extract the plaintext with `''${decrypt} ''${escapeShellArg dep.file}`.
             decrypt, # The base rage command that can decrypt secrets to stdout by

@@ -10,7 +10,7 @@ fi
 
 agenixActivateNixOS
 if [[ $(cat /run/agenix/secret) == "very good password" ]]; then
-	echo "Decryption suceeded"
+	echo "Decryption succeeded"
 	exit 0
 else
 	echo "Wrong Decrypted value: "

@@ -103,7 +103,7 @@ in
 
           collectHomeManagerConfigurations = mkOption {
             type = types.bool;
-            description = "Whether to collect home manager configurations automatically from specified NixOS configurations.";
+            description = "Whether to collect home manager configurations automatically from specified NixOS and darwin configurations.";
             default = true;
           };
 
