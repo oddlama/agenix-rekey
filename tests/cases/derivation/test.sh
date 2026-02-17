@@ -1,6 +1,21 @@
-agenix rekey
+if ! rekey_output="$(agenix rekey 2>&1)"; then
+  echo "$rekey_output"
+  exit 1
+fi
+echo "$rekey_output"
+if grep -Fq "without a proper context" <<< "$rekey_output"; then
+  echo "Unexpected Nix string-context warning during derivation rekey"
+  exit 1
+fi
 
-out_paths="$(agenix rekey --show-out-paths)"
+if ! out_paths="$(agenix rekey --show-out-paths 2>&1)"; then
+  echo "$out_paths"
+  exit 1
+fi
+if grep -Fq "without a proper context" <<< "$out_paths"; then
+  echo "Unexpected Nix string-context warning while listing derivation out paths"
+  exit 1
+fi
 if [[ -z "$out_paths" ]]; then
   echo "No derivation out paths were returned"
   exit 1
@@ -13,7 +28,14 @@ while read -r path; do
   fi
 done <<< "$out_paths"
 
-drv_paths="$(agenix rekey --show-drv-paths)"
+if ! drv_paths="$(agenix rekey --show-drv-paths 2>&1)"; then
+  echo "$drv_paths"
+  exit 1
+fi
+if grep -Fq "without a proper context" <<< "$drv_paths"; then
+  echo "Unexpected Nix string-context warning while listing derivation drv paths"
+  exit 1
+fi
 if [[ -z "$drv_paths" ]]; then
   echo "No derivation drv paths were returned"
   exit 1

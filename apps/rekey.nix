@@ -48,7 +48,10 @@ let
     if hasPrefix userFlakeDir fileStr then
       "." + removePrefix userFlakeDir fileStr
     else
-      throw "Cannot determine true origin of ${fileStr} which doesn't seem to be a direct subpath of the flake directory ${userFlakeDir}.";
+      throw ''
+        Cannot determine true origin of ${fileStr}: it doesn't seem to be a direct subpath of the flake directory ${userFlakeDir}.
+        Paths such as `age.rekey.localStorageDir` and `age.secrets.<name>.rekeyFile` must be constructed relative to the flake root.
+      '';
 
   nodesWithDerivationStorage = attrValues (
     filterAttrs (

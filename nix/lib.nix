@@ -44,17 +44,30 @@ let
     filter (x: x != null) (catAttrs "pubkey" mergedMasterIdentities) ++ mergedExtraEncryptionPubkeys;
 
   extraEncryptionPubkeyArgs = concatStringsSep " " (map pubkeyOpt extraEncryptionPubkeys);
-  # For decryption, we require access to all master identities
-  decryptionMasterIdentityArgs = toIdentityArgs mergedMasterIdentities;
 
   userFlakeDir = toString userFlake.outPath;
+  # Files that live in the user's flake should be referenced via relative paths
+  # in generated scripts to avoid embedding contextless store source strings.
+  runtimePathFor =
+    filePath:
+    let
+      fileStr = toString filePath;
+    in
+    if hasPrefix userFlakeDir fileStr then "." + removePrefix userFlakeDir fileStr else fileStr;
+
+  normalizedMasterIdentities = map (
+    x: x // { identity = runtimePathFor x.identity; }
+  ) mergedMasterIdentities;
+  # For decryption, we require access to all master identities
+  decryptionMasterIdentityArgs = toIdentityArgs normalizedMasterIdentities;
+
   relativeToFlake =
     filePath:
     let
       fileStr = toString filePath;
     in
     if hasPrefix userFlakeDir fileStr then
-      "." + removePrefix userFlakeDir fileStr
+      runtimePathFor filePath
     else
       warn "Ignoring ${fileStr} which isn't a direct subpath of the flake directory ${userFlakeDir}, meaning this script cannot determine it's true origin!" null;
 
@@ -77,7 +90,7 @@ let
       # Master identities that have a pubkey can be added without further treatment.
       ${concatStringsSep "\n" (
         map (x: ''masterIdentityMap[${escapeShellArg (removeSuffix "\n" x.pubkey)}]=${x.identity}'') (
-          filter (x: x.pubkey != null) mergedMasterIdentities
+          filter (x: x.pubkey != null) normalizedMasterIdentities
         )
       )}
 
@@ -86,7 +99,7 @@ let
       masterIdentityArgs=()
       # shellcheck disable=SC2041,SC2043,SC2086
       for file in ${
-        concatStringsSep " " (map (x: x.identity) (filter (x: x.pubkey == null) mergedMasterIdentities))
+        concatStringsSep " " (map (x: x.identity) (filter (x: x.pubkey == null) normalizedMasterIdentities))
       }; do
         # Keep track if a file was processed.
         file_processed=false
