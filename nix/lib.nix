@@ -69,7 +69,7 @@ let
     if hasPrefix userFlakeDir fileStr then
       runtimePathFor filePath
     else
-      warn "Ignoring ${fileStr} which isn't a direct subpath of the flake directory ${userFlakeDir}, meaning this script cannot determine it's true origin!" null;
+      warn "Ignoring ${fileStr} which isn't a direct subpath of the flake directory ${userFlakeDir}, meaning this script cannot determine its true origin!" null;
 
   # Relative path to all rekeyable secrets. Filters and warns on paths that are not part of the root flake.
   validRelativeSecretPaths = builtins.sort (a: b: a < b) (
