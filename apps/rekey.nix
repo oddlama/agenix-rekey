@@ -37,9 +37,9 @@ let
   # Returns the outPath/drvPath for the secrets of a given host, without
   # triggering a build of the derivation.
   outPathFor =
-    hostCfg: toString (derivationFor hostCfg).outPath;
+    hostCfg: builtins.unsafeDiscardStringContext (toString (derivationFor hostCfg).outPath);
   drvPathFor =
-    hostCfg: toString (derivationFor hostCfg).drvPath;
+    hostCfg: builtins.unsafeDiscardStringContext (toString (derivationFor hostCfg).drvPath);
   relativeToFlake =
     filePath:
     let
