@@ -40,18 +40,20 @@ let
     hostCfg: builtins.unsafeDiscardStringContext (toString (derivationFor hostCfg).outPath);
   drvPathFor =
     hostCfg: builtins.unsafeDiscardStringContext (toString (derivationFor hostCfg).drvPath);
-  relativeToFlake =
-    filePath:
+  runtimePathFor =
+    rootDir: filePath:
     let
       fileStr = toString filePath;
+      rootStr = toString rootDir;
     in
-    if hasPrefix userFlakeDir fileStr then
-      "." + removePrefix userFlakeDir fileStr
+    if hasPrefix rootStr fileStr then
+      "." + removePrefix rootStr fileStr
     else
       throw ''
-        Cannot determine true origin of ${fileStr}: it doesn't seem to be a direct subpath of the flake directory ${userFlakeDir}.
+        Cannot determine true origin of ${fileStr}: it doesn't seem to be a direct subpath of the flake directory ${rootStr}.
         Paths such as `age.rekey.localStorageDir` and `age.secrets.<name>.rekeyFile` must be constructed relative to the flake root.
       '';
+  relativeToFlake = filePath: runtimePathFor userFlakeDir filePath;
 
   nodesWithDerivationStorage = attrValues (
     filterAttrs (
