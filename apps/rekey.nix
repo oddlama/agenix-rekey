@@ -435,7 +435,72 @@ pkgs.writeShellScriptBin "agenix-rekey" ''
 
     if [[ "''${#DRVS_TO_BUILD[@]}" -gt 0 ]]; then
       echo "[1;32m   Realizing[m [32m''${#DRVS_TO_BUILD[@]} store paths[m"
-      nix build --no-link --extra-sandbox-paths "''${!SANDBOX_PATHS[*]}" --impure "''${DRVS_TO_BUILD[@]}"
+
+      IFS=$' \t\n' read -ra C <<< "$(nix config show trusted_users 2>/dev/null || printf ${"''"})"
+      declare -A users
+      for u in "''${C[@]}"; do
+        # Skip empty lines from nix output
+        [[ -z $u ]] && continue
+        users["$u"]=1
+      done
+
+      me=''${USER:-$(id -un 2>/dev/null || printf 'unknown')}
+      if [[ -z ''${users[$me]:-} ]]; then
+        {
+
+          normalise() {
+            local p=$1
+            p=''${p%/} # remove trailing /
+            [[ $p != /* ]] && p="/$p"
+            printf '%s\n' "$p"
+          }
+
+          IFS=$' \t\n' read -ra B_raw <<< "$(nix config show sandbox-paths 2>/dev/null || printf ${"''"})"
+          EXISTING_SANDBOX_PATHS=()
+          for elem in "''${B_raw[@]}"; do
+            # Skip empty lines
+            [[ -z $elem ]] && continue
+
+            if [[ $elem == *'='* ]]; then
+              # Ignore them for now as I hope no one has a setup where the cache path is
+              # bind mounted to somewhere else in the sandbox
+              continue;
+            fi
+            if [[ $elem == *'?' ]]; then
+              elem=''${elem%?} # remove trailing ?
+            fi
+            EXISTING_SANDBOX_PATHS+=("$elem")
+          done
+
+          # Check that every requested Sandbox Path is
+          # already in the `sandbox-paths` setting
+          orphans=()
+          for path in "''${!SANDBOX_PATHS[@]}"; do
+            np=$(normalise "$path")
+            found=0
+            while [[ "$np" != "/" ]]; do
+              if [[ " ''${EXISTING_SANDBOX_PATHS[*]} " =~ [[:space:]]''${np}[[:space:]] ]]; then
+                found=1
+                break
+              fi
+              np=''${np%/*}
+              [[ $np ]] || np="/"
+            done
+            ((found)) || orphans+=("$path")
+          done
+
+          if [[ ''${#orphans[@]} -gt 0 ]]; then
+            echo "ERROR: You are not allowed to set extra-sandbox-paths, but the nix daemon needs to be allowed to access these paths:"
+            printf '  - %s\n' "''${orphans[@]}"
+            echo "Either add yourself to the 'trusted-users' setting.[m [31m(Heavily Discouraged as this will give you root access)[m."
+            echo "Or add these paths or a parent of them to 'extra-sandbox-paths' in your 'nix.conf'"
+            exit 1
+          fi
+          nix build --no-link --impure "''${DRVS_TO_BUILD[@]}"
+        } >&2
+      else
+        nix build --no-link --extra-sandbox-paths "''${!SANDBOX_PATHS[*]}" --impure "''${DRVS_TO_BUILD[@]}"
+      fi
     else
       echo "Already up to date."
     fi
