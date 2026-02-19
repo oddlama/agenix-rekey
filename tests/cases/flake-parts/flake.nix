@@ -3,7 +3,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     nixpkgs-lib.url = "github:nix-community/nixpkgs.lib";
     darwin = {
-      url = "github:lnl7/nix-darwin";
+      url = "github:nix-darwin/nix-darwin";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     systems.url = "github:nix-systems/default";
@@ -83,6 +83,28 @@
             )
           ];
         };
+
+        darwinConfigurations.host-darwin = inputs.darwin.lib.darwinSystem {
+          system = "aarch64-darwin";
+          modules = [
+            inputs.agenix.darwinModules.default
+            inputs.agenix-rekey.darwinModules.default
+            (
+              { config, ... }:
+              {
+                networking.hostName = "host-darwin";
+                age.rekey = {
+                  hostPubkey = ./host.pub;
+                  masterIdentities = [ ./key.txt ];
+                  storageMode = "local";
+                  localStorageDir = ./. + "/secrets/rekeyed/${config.networking.hostName}";
+                };
+
+                age.secrets.secret.rekeyFile = ./secret.age;
+              }
+            )
+          ];
+        };
       };
 
       perSystem =
@@ -93,6 +115,7 @@
         {
           # Tell agenix-rekey which hosts to consider
           agenix-rekey.nixosConfigurations = inputs.self.nixosConfigurations;
+          agenix-rekey.darwinConfigurations = inputs.self.darwinConfigurations;
 
           # Not actually needed we just need it for tests
           packages.agenix = config.agenix-rekey.package;

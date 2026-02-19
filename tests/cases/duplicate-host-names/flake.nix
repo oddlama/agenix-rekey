@@ -51,17 +51,15 @@
   outputs =
     { self, ... }@inputs:
     {
-      # A simple nixos host which uses one secret
       nixosConfigurations.host = inputs.nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
           inputs.agenix.nixosModules.default
           inputs.agenix-rekey.nixosModules.default
-
-          # configuration.nix
           (
             { config, ... }:
             {
+              networking.hostName = "host-nixos";
               services.openssh.enable = true;
               age.rekey = {
                 hostPubkey = ./host.pub;
@@ -69,14 +67,13 @@
                 storageMode = "local";
                 localStorageDir = ./. + "/secrets/rekeyed/${config.networking.hostName}";
               };
-
               age.secrets.secret.rekeyFile = ./secret.age;
             }
           )
         ];
       };
 
-      darwinConfigurations.host-darwin = inputs.darwin.lib.darwinSystem {
+      darwinConfigurations.host = inputs.darwin.lib.darwinSystem {
         system = "aarch64-darwin";
         modules = [
           inputs.agenix.darwinModules.default
@@ -91,7 +88,6 @@
                 storageMode = "local";
                 localStorageDir = ./. + "/secrets/rekeyed/${config.networking.hostName}";
               };
-
               age.secrets.secret.rekeyFile = ./secret.age;
             }
           )
@@ -107,14 +103,11 @@
       };
     }
     // inputs.flake-utils.lib.eachDefaultSystem (system: rec {
-      # Create a pkgs with the agenix-rekey overlay so we have access to `pkgs.agenix-rekey` later
       pkgs = import inputs.nixpkgs {
         inherit system;
         overlays = [ inputs.agenix-rekey.overlays.default ];
       };
       packages.agenix = pkgs.agenix-rekey;
-
-      # Add agenix-rekey to your devshell, so you can use the `agenix rekey` command
       devShells.default = pkgs.mkShell {
         packages = [ pkgs.agenix-rekey ];
       };

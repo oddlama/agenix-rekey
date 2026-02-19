@@ -2,8 +2,10 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
+    darwin.url = "github:nix-darwin/nix-darwin";
     agenix.url = "github:ryantm/agenix";
     agenix.inputs.nixpkgs.follows = "nixpkgs";
+    agenix.inputs.darwin.follows = "darwin";
     agenix-rekey.url = "github:oddlama/agenix-rekey";
     agenix-rekey.inputs.nixpkgs.follows = "nixpkgs";
   };
@@ -47,6 +49,29 @@
             )
           ];
         };
+
+        # A simple darwin host which uses one secret
+        darwinConfigurations.host2 = inputs.darwin.lib.darwinSystem {
+          system = "aarch64-darwin";
+          modules = [
+            inputs.agenix.darwinModules.default
+            inputs.agenix-rekey.darwinModules.default
+            (
+              { config, ... }:
+              {
+                networking.hostName = "host2";
+                age.rekey = {
+                  hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOy3dC8cCbucumHphroUzZUTKkM0jL3mG3+tkeAWgIdX";
+                  masterIdentities = [ ./yubikey-identity.pub ];
+                  storageMode = "local";
+                  localStorageDir = ./. + "/secrets/rekeyed/${config.networking.hostName}";
+                };
+
+                age.secrets.root-pw-hash.rekeyFile = ./root-pw-hash.age;
+              }
+            )
+          ];
+        };
       };
 
       perSystem =
@@ -58,6 +83,7 @@
         {
           # Tell agenix-rekey which hosts to consider
           agenix-rekey.nixosConfigurations = inputs.self.nixosConfigurations;
+          agenix-rekey.darwinConfigurations = inputs.self.darwinConfigurations;
 
           # Add agenix-rekey to your devshell, so you can use the `agenix rekey` command
           devShells.default = pkgs.mkShell {

@@ -121,7 +121,7 @@ let
           have a generator. This is useful if you want to create derived secrets,
           such as generating a .htpasswd file from several basic auth passwords.
 
-          You may refer to age secrets of other nixos hosts as long as all hosts
+          You may refer to age secrets of other hosts (NixOS or Darwin) as long as all hosts
           are rekeyed via the same flake.
         '';
       };
@@ -140,7 +140,9 @@ let
                      #   Useful to write additional information to adjacent files.
             deps,    # The list or attrset of all secret files from our `dependencies`.
                      #   Each entry is a set of `{ name, host, file }`, corresponding to
-                     #   the secret `nixosConfigurations.''${host}.age.secrets.''${name}`.
+                     #   either `nixosConfigurations.<host>.age.secrets.''${name}` or
+                     #   `darwinConfigurations.<host>.age.secrets.''${name}`.
+                     #   `host` is always namespaced as `nixos:<host>` or `darwin:<host>`.
                      #   `file` is the true source location of the secret's `rekeyFile`.
                      #   You can extract the plaintext with `''${decrypt} ''${escapeShellArg dep.file}`.
             decrypt, # The base rage command that can decrypt secrets to stdout by
