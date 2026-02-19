@@ -491,8 +491,8 @@ This can be easier to deal with than lists in some cases.
 ```
 
 Secrets that only serve as input to further generators can be marked as intermediary by setting the same-named attribute to `true`.
-On the host, they are then replaced by dummy files, i.e., the secret itself is not decrypted.
-This is especially useful, if consumers of the secret only need a hash of a password which you are generating in a second secret: by setting `intermediary = true`, the password itself is not visible on the deployed system.
+These secrets are not rekeyed for the host (i.e., not encrypted with the host's key), and on the host they are replaced by dummy files.
+This is especially useful if consumers of the secret only need a hash of a password which you are generating in a second secret: by setting `intermediary = true`, the password itself cannot be decrypted on the deployed system, even by a root user with access to the host's private key.
 
 ```nix
 {
@@ -598,8 +598,11 @@ you should always use this option instead of `file`.
 | Default | `false` |
 | Example | `true` |
 
-Whether the secret is only required as an intermediary/repository secret and 
-should not be uploaded and decrypted on the host.
+Whether the secret is only required as an intermediary/repository secret and
+should not be rekeyed or decrypted on the host. Intermediary secrets are not
+encrypted with the host's key, ensuring they cannot be decrypted even by a root
+user with access to the host's private key. A dummy file is placed on the host
+to satisfy agenix.
 
 ## `age.secrets.<name>.generator`
 
