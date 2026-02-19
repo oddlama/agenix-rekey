@@ -16,33 +16,23 @@ let
     flip
     foldl'
     hasAttr
-    hasPrefix
     head
     length
     mapAttrs
     mapAttrsToList
-    removePrefix
     stringsWithDeps
     warnIf
     ;
 
   inherit (import ../nix/lib.nix inputs)
-    userFlakeDir
     ageMasterDecrypt
     ageMasterEncrypt
+    relativeToFlakeStrict
     ;
 
-  runtimePathFor =
-    rootDir: filePath:
-    let
-      fileStr = toString filePath;
-      rootStr = toString rootDir;
-    in
-    assert assertMsg (hasPrefix rootStr fileStr)
-      "Cannot generate ${fileStr} as it isn't a direct subpath of the flake directory ${rootStr}, meaning this script cannot determine its true origin!";
-    "." + removePrefix rootStr fileStr;
-
-  relativeToFlake = filePath: runtimePathFor userFlakeDir filePath;
+  relativeToFlake = relativeToFlakeStrict ''
+    Paths such as `age.secrets.<name>.rekeyFile` (including generator dependencies) must be constructed relative to the flake root.
+  '';
 
   mapListOrAttrs = f: x: if builtins.isList x then map f x else mapAttrs (_: f) x;
   mapListOrAttrValues = f: x: if builtins.isList x then map f x else mapAttrsToList (_: f) x;

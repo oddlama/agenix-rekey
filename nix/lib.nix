@@ -46,14 +46,21 @@ let
   extraEncryptionPubkeyArgs = concatStringsSep " " (map pubkeyOpt extraEncryptionPubkeys);
 
   userFlakeDir = toString userFlake.outPath;
+  pathRelativeToRootOrNull =
+    rootDir: filePath:
+    let
+      fileStr = toString filePath;
+      rootStr = toString rootDir;
+    in
+    if hasPrefix rootStr fileStr then "." + removePrefix rootStr fileStr else null;
   # Files that live in the user's flake should be referenced via relative paths
   # in generated scripts to avoid embedding contextless store source strings.
   runtimePathFor =
     filePath:
     let
-      fileStr = toString filePath;
+      relativePath = pathRelativeToRootOrNull userFlakeDir filePath;
     in
-    if hasPrefix userFlakeDir fileStr then "." + removePrefix userFlakeDir fileStr else fileStr;
+    if relativePath != null then relativePath else toString filePath;
 
   normalizedMasterIdentities = map (
     x: x // { identity = runtimePathFor x.identity; }
@@ -65,11 +72,26 @@ let
     filePath:
     let
       fileStr = toString filePath;
+      relativePath = pathRelativeToRootOrNull userFlakeDir filePath;
     in
-    if hasPrefix userFlakeDir fileStr then
-      runtimePathFor filePath
+    if relativePath != null then
+      relativePath
     else
       warn "Ignoring ${fileStr} which isn't a direct subpath of the flake directory ${userFlakeDir}, meaning this script cannot determine its true origin!" null;
+
+  relativeToFlakeStrict =
+    hint: filePath:
+    let
+      fileStr = toString filePath;
+      relativePath = pathRelativeToRootOrNull userFlakeDir filePath;
+    in
+    if relativePath != null then
+      relativePath
+    else
+      throw ''
+        Cannot determine true origin of ${fileStr}: it doesn't seem to be a direct subpath of the flake directory ${userFlakeDir}.
+        ${hint}
+      '';
 
   # Relative path to all rekeyable secrets. Filters and warns on paths that are not part of the root flake.
   validRelativeSecretPaths = builtins.sort (a: b: a < b) (
@@ -196,6 +218,7 @@ let
 in
 {
   inherit userFlakeDir;
+  inherit relativeToFlakeStrict;
   inherit relativeToFlake;
   inherit validRelativeSecretPaths;
   inherit mergedSecrets;
