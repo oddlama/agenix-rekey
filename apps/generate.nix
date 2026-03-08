@@ -123,12 +123,12 @@ let
         1 # Have at least one entry
         ${concatStringsSep "\n" (
           flip mapListOrAttrValues contextSecret.secret.generator.dependencies (
-            dep: "\"$(stat -c %Y ${escapeShellArg (relativeToFlake dep.rekeyFile)} 2>/dev/null || echo 1)\""
+            dep: "\"$(${pkgs.coreutils}/bin/stat -c %Y ${escapeShellArg (relativeToFlake dep.rekeyFile)} 2>/dev/null || echo 1)\""
           )
         )}
       )
       mtime_newest_dep=$(IFS=$'\n'; sort -nr <<< "''${dep_mtimes[*]}" | head -n1)
-      mtime_this=$(stat -c %Y ${escapeShellArg contextSecret.sourceFile} 2>/dev/null || echo 0)
+      mtime_this=$(${pkgs.coreutils}/bin/stat -c %Y ${escapeShellArg contextSecret.sourceFile} 2>/dev/null || echo 0)
 
       # Regenerate if the file doesn't exist, any dependency is newer, or we should force regeneration
       if [[ ! -e ${escapeShellArg contextSecret.sourceFile} ]] || [[ "$mtime_newest_dep" -gt "$mtime_this" ]] || [[ "$FORCE_GENERATE" == true ]]; then
