@@ -1,6 +1,7 @@
 {
   pkgs,
   nodes,
+  writeDephash ? false,
   ...
 }@inputs:
 let
@@ -117,21 +118,40 @@ let
   # The command that actually generates a secret.
   secretGenerationCommand = contextSecret: ''
     if wants_secret ${escapeShellArg contextSecret.sourceFile} ${escapeShellArg (concatStringsSep "," contextSecret.secret.generator.tags)} ; then
-      # If the secret has dependencies, force regeneration if any
-      # dependency was modified since its last generation
-      dep_mtimes=(
-        1 # Have at least one entry
-        ${concatStringsSep "\n" (
+      dep_hash_file=${escapeShellArg contextSecret.sourceFile}.dephash
+      deps_changed=false
+      ${if contextSecret.secret.generator.dependencies == [ ] || contextSecret.secret.generator.dependencies == { } then ''
+      dep_hash=""
+      '' else ''
+      dep_hash=$(${pkgs.coreutils}/bin/sha256sum ${
+        concatStringsSep " " (
           flip mapListOrAttrValues contextSecret.secret.generator.dependencies (
-            dep: "\"$(stat -c %Y ${escapeShellArg (relativeToFlake dep.rekeyFile)} 2>/dev/null || echo 1)\""
+            dep: escapeShellArg (relativeToFlake dep.rekeyFile)
           )
-        )}
-      )
-      mtime_newest_dep=$(IFS=$'\n'; sort -nr <<< "''${dep_mtimes[*]}" | head -n1)
-      mtime_this=$(stat -c %Y ${escapeShellArg contextSecret.sourceFile} 2>/dev/null || echo 0)
+        )
+      } 2>/dev/null | ${pkgs.coreutils}/bin/sort | ${pkgs.coreutils}/bin/sha256sum | cut -d' ' -f1)
 
-      # Regenerate if the file doesn't exist, any dependency is newer, or we should force regeneration
-      if [[ ! -e ${escapeShellArg contextSecret.sourceFile} ]] || [[ "$mtime_newest_dep" -gt "$mtime_this" ]] || [[ "$FORCE_GENERATE" == true ]]; then
+      if [[ -f "$dep_hash_file" ]]; then
+        # Content hash exists — use it for dependency change detection
+        old_dep_hash=$(cat "$dep_hash_file" 2>/dev/null)
+        [[ "$dep_hash" != "$old_dep_hash" ]] && deps_changed=true
+      else
+        # No content hash — fall back to mtime comparison
+        dep_mtimes=(
+          ${concatStringsSep "\n" (
+            flip mapListOrAttrValues contextSecret.secret.generator.dependencies (
+              dep: "\"$(stat -c %Y ${escapeShellArg (relativeToFlake dep.rekeyFile)} 2>/dev/null || echo 1)\""
+            )
+          )}
+        )
+        mtime_newest_dep=$(IFS=$'\n'; sort -nr <<< "''${dep_mtimes[*]}" | head -n1)
+        mtime_this=$(stat -c %Y ${escapeShellArg contextSecret.sourceFile} 2>/dev/null || echo 0)
+        [[ "$mtime_newest_dep" -gt "$mtime_this" ]] && deps_changed=true
+      fi
+      ''}
+
+      # Regenerate if the file doesn't exist, dependencies changed, or we should force regeneration
+      if [[ ! -e ${escapeShellArg contextSecret.sourceFile} ]] || [[ "$deps_changed" == true ]] || [[ "$FORCE_GENERATE" == true ]]; then
         echo "[1;32m  Generating[m [34m"${escapeShellArg contextSecret.sourceFile}"[m [90m("${concatStringsSep "', '" (map escapeShellArg contextSecret.defs)}")[m"
         mkdir -p "$(dirname ${escapeShellArg contextSecret.sourceFile})"
 
@@ -144,9 +164,17 @@ let
         } | ${ageMasterEncrypt} -o ${escapeShellArg contextSecret.sourceFile} \
           || die "Failed to generate or encrypt secret."
 
+        if [[ "$WRITE_DEPHASH" == true ]] && [[ -n "$dep_hash" ]]; then
+          echo "$dep_hash" > "$dep_hash_file"
+        fi
+
         if [[ "$ADD_TO_GIT" == true ]]; then
           git add ${escapeShellArg contextSecret.sourceFile} \
             || die "Failed to add generated secret to git"
+          if [[ "$WRITE_DEPHASH" == true ]] && [[ -n "$dep_hash" ]]; then
+            git add "$dep_hash_file" \
+              || die "Failed to add dependency hash to git"
+          fi
         fi
       else
         echo "[1;90m    Skipping[m [90m[already exists] "${escapeShellArg contextSecret.sourceFile}" ("${concatStringsSep "', '" (map escapeShellArg contextSecret.defs)}")[m"
@@ -193,6 +221,7 @@ pkgs.writeShellScriptBin "agenix-generate" ''
   }
 
   FORCE_GENERATE=false
+  WRITE_DEPHASH=${if writeDephash then "true" else "false"}
   ADD_TO_GIT=''${AGENIX_REKEY_ADD_TO_GIT-false}
   POSITIONAL_ARGS=()
   TAGS=""
