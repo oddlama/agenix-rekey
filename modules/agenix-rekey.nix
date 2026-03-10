@@ -37,7 +37,7 @@ let
     types
     ;
 
-  target = (import ../nix/target-name.nix) { inherit config; };
+  target = config.age.rekey.recipientIdentifier;
   # This pubkey is just binary 0x01 in each byte, so you can be sure there is no known private key for this
   dummyPubkey = "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3290gq";
   isAbsolutePath = x: substring 0 1 x == "/";
@@ -107,7 +107,7 @@ let
             (listOf unspecified)
             (attrsOf unspecified)
           ];
-        example = literalExpression ''[ config.age.secrets.basicAuthPw1 nixosConfigurations.machine2.config.age.secrets.basicAuthPw ]'';
+        example = literalExpression "[ config.age.secrets.basicAuthPw1 nixosConfigurations.machine2.config.age.secrets.basicAuthPw ]";
         default = [ ];
         description = ''
           Other secrets on which this secret depends. This guarantees that in the final
@@ -448,6 +448,20 @@ in
     };
 
     rekey = {
+      recipientIdentifier = mkOption {
+        type = types.str;
+        default =
+          config.networking.hostName or (config.home.username
+            or (throw "age.rekey.recipientIdentifier must be set for this configuration type")
+          );
+        description = ''
+          The identifier for this recipient used in derivation names and default storage paths.
+
+          Defaults to the hostname for NixOS configurations or the username for
+          home-manager configurations. Must be explicitly set for other configuration types.
+        '';
+      };
+
       secretsDir = mkOption {
         type = types.nullOr types.path;
         default = null;
