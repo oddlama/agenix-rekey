@@ -76,6 +76,9 @@
               nixosConfigurations ? { },
               darwinConfigurations ? { },
               homeConfigurations ? { },
+              # Generic support for custom configurations (fork extension)
+              # Supports nixidy, terranix, or any config with module system
+              extraConfigurations ? { },
               collectHomeManagerConfigurations ? true,
               # Legacy alias for nixosConfigurations see https://github.com/oddlama/agenix-rekey/pull/51
               nodes ? { },
@@ -110,6 +113,7 @@
                       nixosConfigurations
                       darwinConfigurations
                       homeConfigurations
+                      extraConfigurations
                       collectHomeManagerConfigurations
                       ;
                     inherit (pkgs') lib;
