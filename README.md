@@ -381,7 +381,7 @@ can use to define our generation script.
 | Argument | Description |
 |-----|-----|
 | `name`    | The name of the secret to be generated, as defined in `age.secrets.<name>` |
-| `secret`  | The definition of the secret to be generated |
+| `secret`  | The full definition of the secret to be generated, including `secret.settings` if set |
 | `lib`     | Convenience access to the nixpkgs library |
 | `pkgs`    | The package set for the _host that is running the generation script_. Don't use any other packgage set in the script! |
 | `file`    | The actual path to the .age file that will be written after this function returns and the content is encrypted. Useful to write additional information to adjacent files. |
@@ -452,6 +452,64 @@ which are also generated automatically:
           ${decrypt} ${lib.escapeShellArg file} \
             | ${pkgs.apacheHttpd}/bin/htpasswd -niBC 10 ${lib.escapeShellArg host}
         '');
+    };
+  };
+}
+```
+
+### Parameterizing generators with settings
+
+The `settings` option on a secret lets you pass arbitrary configuration to its
+generator, making it easy to write reusable generators that adapt their behavior
+per-secret.
+
+Settings are accessible in the generator via `secret.settings`:
+
+```nix
+{
+  # A reusable generator producing passphrases of a configurable length
+  age.generators.passphrase-n = { pkgs, secret, ... }:
+    "${pkgs.xkcdpass}/bin/xkcdpass --numwords=${toString secret.settings.numwords}";
+
+  age.secrets.shortPassphrase = {
+    rekeyFile = ./secrets/shortPassphrase.age;
+    generator.script = "passphrase-n";
+    settings.numwords = 4;
+  };
+
+  age.secrets.longPassphrase = {
+    rekeyFile = ./secrets/longPassphrase.age;
+    generator.script = "passphrase-n";
+    settings.numwords = 12;
+  };
+}
+```
+
+Nested attrsets work fine too, which is useful for more complex generators like
+certificate creation:
+
+```nix
+{
+  age.generators.tls-leaf-cert = { pkgs, secret, ... }:
+    let s = secret.settings.subject; in
+    ''
+      ${pkgs.openssl}/bin/openssl req -x509 -newkey ed25519 \
+        -days ${toString secret.settings.validity} \
+        -subj "/C=${s.country}/ST=${s.state}/L=${s.location}/O=${s.organization}" \
+        -nodes -keyout /dev/null 2>/dev/null
+    '';
+
+  age.secrets.myServiceCert = {
+    rekeyFile = ./secrets/myServiceCert.age;
+    generator.script = "tls-leaf-cert";
+    settings = {
+      validity = 365;
+      subject = {
+        country = "US";
+        state = "Washington";
+        location = "Seattle";
+        organization = "My Organization";
+      };
     };
   };
 }
@@ -662,6 +720,21 @@ normal user that runs `agenix generate`.
 
 Optional list of tags that may be used to refer to secrets that use this generator.
 Useful to regenerate all secrets matching a specific tag using `agenix generate -f -t wireguard`.
+
+## `age.secrets.<name>.settings`
+
+| Type    | `nullOr attrs` |
+|-----|-----|
+| Default | `null` |
+| Example | See [Parameterizing generators with settings](#parameterizing-generators-with-settings). |
+
+An arbitrary attrset of settings passed to the secret's generator, enabling
+reusable generators that can be parameterized per-secret. Settings are accessed
+in the generator script via the `secret` argument:
+
+```nix
+age.generators.my-generator = { secret, ... }: "... ${toString secret.settings.someOption} ...";
+```
 
 ## `age.generators`
 
