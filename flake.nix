@@ -86,6 +86,9 @@
               # Defaults to rage (pkgs.rage). We only guarantee compatibility for
               # pkgs.age and pkgs.rage.
               agePackage ? (p: p.rage),
+              # Write content hashes of generator dependencies alongside generated secrets.
+              # Avoids spurious regeneration after git operations that reset mtimes.
+              writeDephash ? false,
               # The systems to generate apps for
               systems ? [
                 "x86_64-linux"
@@ -103,7 +106,7 @@
               in
               lib.genAttrs allApps (
                 app:
-                import ./apps/${app}.nix {
+                import ./apps/${app}.nix ({
                   nodes = import ./nix/select-nodes.nix {
                     inherit
                       nodes
@@ -116,7 +119,9 @@
                   };
                   inherit userFlake agePackage;
                   pkgs = pkgs';
-                }
+                } // lib.optionalAttrs (app == "generate") {
+                  inherit writeDephash;
+                })
               )
             );
         };

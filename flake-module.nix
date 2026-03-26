@@ -33,7 +33,7 @@ in
           _system: config':
           lib.genAttrs allApps (
             app:
-            import ./apps/${app}.nix {
+            import ./apps/${app}.nix ({
               nodes = import ./nix/select-nodes.nix {
                 inherit (config'.agenix-rekey)
                   nixosConfigurations
@@ -46,7 +46,9 @@ in
               inherit (config'.agenix-rekey) pkgs;
               agePackage = _: config'.agenix-rekey.agePackage;
               userFlake = self;
-            }
+            } // lib.optionalAttrs (app == "generate") {
+              inherit (config'.agenix-rekey) writeDephash;
+            })
           )
         ) config.allSystems;
         defaultText = "Automatically filled by agenix-rekey";
@@ -119,6 +121,20 @@ in
               Determines the age package used for encrypting / decrypting.
               Defaults to `pkgs.rage`. We only guarantee compatibility with
               `pkgs.age` and `pkgs.rage`.
+            '';
+          };
+
+          writeDephash = mkOption {
+            type = types.bool;
+            default = false;
+            description = ''
+              Write content hashes of generator dependencies alongside generated secrets
+              (as `.dephash` sidecar files). When enabled, subsequent runs use these hashes
+              instead of file modification times to detect dependency changes.
+
+              This avoids spurious regeneration after git operations that reset mtimes.
+              When no `.dephash` file exists for a secret, the old mtime-based logic is
+              used as a fallback.
             '';
           };
 
