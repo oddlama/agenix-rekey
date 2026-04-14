@@ -544,6 +544,18 @@ in
         '';
       };
 
+      requiredSystemFeatures = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = ''
+          Additional requiredSystemFeatures to set on the rekeying derivation.
+          Useful for ensuring the derivation is only built on machines that
+          have access to hardware tokens (e.g. YubiKeys) by setting this to
+          [ "yubikey" ] and advertising the feature only on machines with
+          the token attached.
+        '';
+      };
+
       localStorageDir = mkOption {
         type = types.path;
         example = literalExpression ''./. /* <- flake root */ + "/secrets/rekeyed/myhost" /* separate folder for each host */'';
