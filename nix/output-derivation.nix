@@ -48,6 +48,8 @@ appHostPkgs.stdenv.mkDerivation {
   name = "agenix-rekey-host-secrets";
   description = "Rekeyed secrets for ${target}";
 
+  inherit (hostConfig.age.rekey) requiredSystemFeatures;
+
   # No special inputs are necessary.
   dontUnpack = true;
   dontPatch = true;
