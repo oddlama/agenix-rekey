@@ -27,7 +27,9 @@ let
 
   # Collect rekeying options from all hosts
   mergeArray = f: unique (concatLists (mapAttrsToList (_: f) nodes));
-  mergedAgePlugins = mergeArray (x: x.config.age.rekey.agePlugins or [ ]);
+  mergedAgePlugins = filter (
+    p: (p.system or pkgs.stdenv.hostPlatform.system) == pkgs.stdenv.hostPlatform.system
+  ) (mergeArray (x: x.config.age.rekey.agePlugins or [ ]));
   mergedMasterIdentities = mergeArray (x: x.config.age.rekey.masterIdentities or [ ]);
   mergedExtraEncryptionPubkeys = mergeArray (x: x.config.age.rekey.extraEncryptionPubkeys or [ ]);
   mergedSecrets = mergeArray (
