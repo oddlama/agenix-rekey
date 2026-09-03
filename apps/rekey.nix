@@ -112,7 +112,7 @@ let
                   # Don't escape the out path as it could contain variables we want to expand
                   if reencrypt "${secretOut}" ${
                     escapeShellArgs [
-                      secret.rekeyFile
+                      "${secret.rekeyFile}"
                       secretName
                       hostName
                     ]
@@ -186,7 +186,7 @@ let
                   if ! reencrypt ${
                     escapeShellArgs [
                       secretOut
-                      secret.rekeyFile
+                      "${secret.rekeyFile}"
                       secretName
                       hostName
                     ]
