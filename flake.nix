@@ -144,6 +144,10 @@
           checks.required-system-features = import ./tests/required-system-features.nix {
             inherit pkgs;
           };
+          checks.age-plugin-platforms = import ./tests/age-plugin-platforms.nix {
+            inherit pkgs;
+            inherit (inputs) nixpkgs;
+          };
 
           pre-commit.settings.hooks.treefmt.enable = true;
           treefmt = {
