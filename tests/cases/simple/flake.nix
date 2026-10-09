@@ -60,12 +60,21 @@
 
           # configuration.nix
           (
-            { config, ... }:
+            { config, pkgs, ... }:
             {
               services.openssh.enable = true;
               age.rekey = {
                 hostPubkey = ./host.pub;
                 masterIdentities = [ ./key.txt ];
+                masterIdentitySessionWrapper = pkgs.writeShellApplication {
+                  name = "test-master-identity-session";
+                  text = ''
+                    echo 'Master identity session started.'
+                    [[ "$1" == -- ]]
+                    shift
+                    exec "$@"
+                  '';
+                };
                 storageMode = "local";
                 localStorageDir = ./. + "/secrets/rekeyed/${config.networking.hostName}";
               };

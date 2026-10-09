@@ -3,21 +3,74 @@ let
   inherit (import ../nix/lib.nix inputs)
     ageMasterEncrypt
     ageMasterDecrypt
+    masterIdentitySessionWrapper
     validRelativeSecretPaths
     ;
+
+  masterIdentitySessionPrelude =
+    if masterIdentitySessionWrapper == null then
+      ""
+    else
+      ''
+        if [[ "''${AGENIX_REKEY_MASTER_IDENTITY_SESSION_ACTIVE:-}" != true ]]; then
+          export AGENIX_REKEY_MASTER_IDENTITY_SESSION_ACTIVE=true
+          export AGENIX_REKEY_INTERNAL_OPERATION_PLAN_SHOWN=true
+          exec ${pkgs.lib.getExe masterIdentitySessionWrapper} -- "$0" "''${ORIGINAL_ARGS[@]}"
+        fi
+      '';
 in
 pkgs.writeShellScriptBin "agenix-update-masterkeys" ''
   set -uo pipefail
 
+  ORIGINAL_ARGS=("$@")
+
   function die() { echo "[1;31merror:[m $*" >&2; exit 1; }
   function show_help() {
-    echo 'Usage: agenix update-masterkeys'
+    echo 'Usage: agenix update-masterkeys [OPTIONS]'
     echo 'Update all stored secrets with a new set of masterkeys.'
+    echo
+    echo 'OPTIONS:'
+    echo '-h, --help    Show help'
   }
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      "help"|"--help"|"-help"|"-h")
+        show_help
+        exit 0
+        ;;
+      *) die "Invalid option '$1'" ;;
+    esac
+  done
 
   if [[ ! -e flake.nix ]] ; then
     die "Please execute this script from your flake's root directory."
   fi
+
+  if [[ "''${AGENIX_REKEY_MASTER_IDENTITY_SESSION_ACTIVE:-}" != true || "''${AGENIX_REKEY_INTERNAL_OPERATION_PLAN_SHOWN:-}" != true ]]; then
+    echo 'Planned operations:'
+    ${
+      if masterIdentitySessionWrapper == null then
+        ""
+      else
+        "echo '  Use one command-scoped master identity session.'"
+    }
+    echo '  Update master-key recipients for these files:'
+    ${
+      if validRelativeSecretPaths == [ ] then
+        "echo '    (none)'"
+      else
+        builtins.concatStringsSep "\n" (
+          builtins.map (path: "printf '    %s\\n' ${pkgs.lib.escapeShellArg path}") validRelativeSecretPaths
+        )
+    }
+    echo '  Each file will be decrypted, re-encrypted for the configured master recipients,'
+    echo '  and replaced only after re-encryption succeeds.'
+    echo 'End of plan.'
+    echo
+  fi
+
+  ${masterIdentitySessionPrelude}
 
   ${builtins.concatStringsSep "" (
     builtins.map (

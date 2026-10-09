@@ -136,6 +136,7 @@
           };
 
           pre-commit.settings.hooks.treefmt.enable = true;
+          checks.master-identity-session = pkgs.callPackage ./tests/master-identity-session.nix { };
           treefmt = {
             projectRootFile = "flake.nix";
             programs = {

@@ -23,7 +23,20 @@ let
     userFlakeDir
     ageHostEncrypt
     ageMasterDecrypt
+    masterIdentitySessionWrapper
     ;
+
+  masterIdentitySessionPrelude =
+    if masterIdentitySessionWrapper == null then
+      ""
+    else
+      ''
+        if [[ "''${AGENIX_REKEY_MASTER_IDENTITY_SESSION_ACTIVE:-}" != true ]]; then
+          export AGENIX_REKEY_MASTER_IDENTITY_SESSION_ACTIVE=true
+          export AGENIX_REKEY_INTERNAL_OPERATION_PLAN_SHOWN=true
+          exec ${pkgs.lib.getExe masterIdentitySessionWrapper} -- "$0" "''${ORIGINAL_ARGS[@]}"
+        fi
+      '';
 
   # The derivation containing the resulting rekeyed secrets for
   # the given host configuration
@@ -61,8 +74,8 @@ let
     ) nodes
   );
 
-  rekeyCommandsForHost =
-    hostName: hostCfg:
+  secretsToRekeyFor =
+    hostCfg:
     let
       # All secrets that have rekeyFile set. These will be rekeyed.
       secretsToRekey = flip filterAttrs hostCfg.config.age.secrets (
@@ -80,6 +93,123 @@ let
         secret.rekeyFile != null && !secret.intermediary
       );
     in
+    secretsToRekey;
+
+  operationPlanForHost =
+    hostName: hostCfg:
+    let
+      secretsToRekey = secretsToRekeyFor hostCfg;
+    in
+    if
+      hostCfg.config.age.rekey.hostPubkey
+      == "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3290gq"
+    then
+      ''
+        printf '  Host %s\n' ${escapeShellArg hostName}
+        echo '    skip host: dummy host public key'
+      ''
+    else
+      {
+        derivation =
+          let
+            rekeyedSecrets = derivationFor hostCfg;
+            outPath = escapeShellArg (outPathFor hostCfg);
+            drvPath = escapeShellArg (drvPathFor hostCfg);
+            planSecret =
+              secretName: secret:
+              let
+                secretOut = rekeyedSecrets.cachePathFor secret;
+              in
+              ''
+                if [[ -e ${secretOut} ]] && [[ "$FORCE" != true ]]; then
+                  printf '    keep %s: already rekeyed\n' ${escapeShellArg secretName}
+                else
+                  printf '    rekey %s: %s -> %s\n' ${
+                    escapeShellArgs [
+                      secretName
+                      secret.rekeyFile
+                      secretOut
+                    ]
+                  }
+                  planned_rekey=true
+                fi
+              '';
+          in
+          ''
+            printf '  Host %s (derivation storage)\n' ${escapeShellArg hostName}
+            planned_delete=false
+            if [[ -e ${outPath} && ( "$FORCE" == true || ! -e ${outPath}/success ) ]]; then
+              printf '    delete store path: %s\n' ${outPath}
+              planned_delete=true
+            fi
+            planned_rekey=false
+            ${concatStringsSep "\n" (mapAttrsToList planSecret secretsToRekey)}
+            if [[ "$planned_rekey" == true || ! -e ${outPath} || "$planned_delete" == true ]]; then
+              printf '    realize derivation: %s\n' ${drvPath}
+            fi
+          '';
+        local =
+          let
+            relativeToFlake =
+              filePath:
+              let
+                fileStr = builtins.unsafeDiscardStringContext (toString filePath);
+              in
+              if hasPrefix userFlakeDir fileStr then
+                "." + removePrefix userFlakeDir fileStr
+              else
+                throw "Cannot determine true origin of ${fileStr} which doesn't seem to be a direct subpath of the flake directory ${userFlakeDir}. Did you make sure to specify `age.rekey.localStorageDir` relative to the root of your flake?";
+
+            hostRekeyDir = relativeToFlake hostCfg.config.age.rekey.localStorageDir;
+            planSecret =
+              secretName: secret:
+              let
+                pubkeyHash = builtins.hashString "sha256" hostCfg.config.age.rekey.hostPubkey;
+                identHash = builtins.substring 0 32 (
+                  builtins.hashString "sha256" (pubkeyHash + builtins.hashFile "sha256" secret.rekeyFile)
+                );
+                secretOut = "${hostRekeyDir}/${identHash}-${secret.name}.age";
+              in
+              ''
+                PLAN_TRACKED_SECRETS[${escapeShellArg secretOut}]=true
+                if [[ -e ${escapeShellArg secretOut} ]] && [[ "$FORCE" != true ]]; then
+                  printf '    keep %s: already rekeyed\n' ${escapeShellArg secretName}
+                else
+                  printf '    rekey %s: %s -> %s\n' ${
+                    escapeShellArgs [
+                      secretName
+                      secret.rekeyFile
+                      secretOut
+                    ]
+                  }
+                fi
+              '';
+          in
+          ''
+            printf '  Host %s (local storage)\n' ${escapeShellArg hostName}
+            printf '    ensure output directory: %s\n' ${escapeShellArg hostRekeyDir}
+            unset PLAN_TRACKED_SECRETS
+            declare -A PLAN_TRACKED_SECRETS=()
+            ${concatStringsSep "\n" (mapAttrsToList planSecret secretsToRekey)}
+            if [[ -d ${escapeShellArg hostRekeyDir} ]]; then
+              while IFS= read -r -d $'\0' f; do
+                if [[ "''${PLAN_TRACKED_SECRETS["$f"]-false}" == false ]]; then
+                  printf '    remove orphan: %s\n' "$f"
+                fi
+              done < <(find ${escapeShellArg hostRekeyDir} -type f -print0)
+            fi
+            if [[ "$ADD_TO_GIT" == true && "''${#PLAN_TRACKED_SECRETS[@]}" -gt 0 ]]; then
+              printf '    stage output directory in git: %s\n' ${escapeShellArg hostRekeyDir}
+            fi
+          '';
+      }
+      .${hostCfg.config.age.rekey.storageMode};
+
+  rekeyCommandsForHost =
+    hostName: hostCfg:
+    let
+      secretsToRekey = secretsToRekeyFor hostCfg;
+    in
     if
       hostCfg.config.age.rekey.hostPubkey
       == "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3290gq"
@@ -91,14 +221,9 @@ let
       {
         derivation =
           let
-            # The derivation containing the resulting rekeyed secrets
             rekeyedSecrets = derivationFor hostCfg;
-
-            # The resulting store path for this host's rekeyed secrets
             outPath = escapeShellArg (outPathFor hostCfg);
-            # The builder which we can use to realise the derivation
             drvPath = escapeShellArg (drvPathFor hostCfg);
-
             rekeyCommand =
               secretName: secret:
               let
@@ -109,7 +234,6 @@ let
                   echo "[1;90m    Skipping[m [90m[already rekeyed] "${escapeShellArg hostName}":"${escapeShellArg secretName}"[m"
                 else
                   echo "[1;32m    Rekeying[m [90m"${escapeShellArg hostName}":[34m"${escapeShellArg secretName}"[m"
-                  # Don't escape the out path as it could contain variables we want to expand
                   if reencrypt "${secretOut}" ${
                     escapeShellArgs [
                       secret.rekeyFile
@@ -125,14 +249,12 @@ let
               '';
           in
           ''
-            # Called in `reencrypt`
             function encrypt() {
               ${ageHostEncrypt hostCfg} "$@"
             }
 
             ANY_DERIVATION_MODE_HOSTS=true
             will_delete=false
-            # Remove any existing rekeyed secrets from the nix store if --force was given
             if [[ -e ${outPath} && ( "$FORCE" == true || ! -e ${outPath}/success ) ]]; then
               echo "[1;31m     Marking[m [31mexisting store path of [33m"${escapeShellArg hostName}"[31m for deletion [90m("${outPath}")[m"
               STORE_PATHS_TO_DELETE+=(${outPath})
@@ -140,12 +262,9 @@ let
             fi
 
             any_rekeyed=false
-            # Rekey secrets for ${hostName}
             mkdir -p ${rekeyedSecrets.cacheDir}/secrets
             ${concatStringsSep "\n" (mapAttrsToList rekeyCommand secretsToRekey)}
 
-            # We need to save the rekeyed output when any secret was rekeyed, or when the
-            # output derivation doesn't exist (it could have been removed manually).
             if [[ "$any_rekeyed" == true || ! -e ${outPath} || "$will_delete" == true ]]; then
               SANDBOX_PATHS[${rekeyedSecrets.cacheDir}]=1
               [[ ${rekeyedSecrets.cacheDir} =~ [[:space:]] ]] \
@@ -176,7 +295,6 @@ let
                 secretOut = "${hostRekeyDir}/${identHash}-${secret.name}.age";
               in
               ''
-                # Mark secret as known
                 TRACKED_SECRETS[${escapeShellArg secretOut}]=true
 
                 if [[ -e ${escapeShellArg secretOut} ]] && [[ "$FORCE" != true ]]; then
@@ -197,20 +315,16 @@ let
               '';
           in
           ''
-            # Called in `reencrypt`
             function encrypt() {
               ${ageHostEncrypt hostCfg} "$@"
             }
 
-            # Create a set of tracked secrets so we can remove orphaned files afterwards
             unset TRACKED_SECRETS
-            declare -A TRACKED_SECRETS=() # the `=()` is required otherwise accessing the length fails with `unbound variable` 
+            declare -A TRACKED_SECRETS=()
 
-            # Rekey secrets for ${hostName}
             mkdir -p ${hostRekeyDir}
             ${concatStringsSep "\n" (mapAttrsToList rekeyCommand secretsToRekey)}
 
-            # Remove orphaned files
             REMOVED_ORPHANS=0
             (
               shopt -s nullglob
@@ -247,6 +361,8 @@ let
 in
 pkgs.writeShellScriptBin "agenix-rekey" ''
   set -euo pipefail
+
+  ORIGINAL_ARGS=("$@")
 
   export PATH="''${PATH:+"''${PATH}:"}"${escapeShellArg binPath}
 
@@ -359,6 +475,21 @@ pkgs.writeShellScriptBin "agenix-rekey" ''
   if [[ ! -e flake.nix ]] ; then
     die "Please execute this script from your flake's root directory."
   fi
+
+  if [[ "''${AGENIX_REKEY_MASTER_IDENTITY_SESSION_ACTIVE:-}" != true || "''${AGENIX_REKEY_INTERNAL_OPERATION_PLAN_SHOWN:-}" != true ]]; then
+    echo 'Planned operations:'
+    ${
+      if masterIdentitySessionWrapper == null then
+        ""
+      else
+        "echo '  Use one command-scoped master identity session.'"
+    }
+    ${concatStringsSep "\n" (mapAttrsToList operationPlanForHost nodes)}
+    echo 'End of plan.'
+    echo
+  fi
+
+  ${masterIdentitySessionPrelude}
 
   dummy_all=0
   function flush_stdin() {

@@ -92,12 +92,11 @@ let
         else
           "Have you added it to git?";
 
-      # Use builtins.path to make sure that we have a standalone copy of the subdirectory in the store.
-      # This is important to ensure that the path only changes if there are actual changes to this
-      # directory. If we were still using userFlake.outPath + "/secrets/[...]" or something similar,
-      # then the path would change on each subsequent build because the flake path changes.
-      rekeyedPath =
-        builtins.path { path = config.age.rekey.localStorageDir; } + "/${identHash}-${secret.name}.age";
+      # The flake supplies localStorageDir from its immutable source path. Do
+      # not create a second lazy builtins.path snapshot here: during a full
+      # flake evaluation that copy can be probed before its store path is
+      # realized, making checks depend on configuration traversal order.
+      rekeyedPath = config.age.rekey.localStorageDir + "/${identHash}-${secret.name}.age";
     in
     assert assertMsg (secret.rekeyFile != null -> builtins.pathExists secret.rekeyFile) ''
       [1;31mhost ${target}: age.secrets.${secret.id}.rekeyFile ([33m${toString secret.rekeyFile}[m[1;31m) doesn't exist.[0m ${generateHint}
@@ -766,6 +765,24 @@ in
           They will be added to the PATH with lowest-priority before rage is invoked,
           meaning if you have the plugin installed on your system, that one is preferred
           in an effort to not break complex setups (e.g. WSL passthrough).
+        '';
+      };
+
+      masterIdentitySessionWrapper = mkOption {
+        type = types.nullOr types.package;
+        default = null;
+        description = ''
+          Optional command wrapper used for batch operations that decrypt with
+          master identities. The wrapper is invoked as:
+
+              <wrapper> -- <agenix-command> [args...]
+
+          It can keep plugin state alive for the duration of one command, for
+          example to reuse a hardware-backed identity without exporting it to
+          disk. The wrapper is applied to `agenix rekey` and
+          `agenix update-masterkeys`; ordinary one-file operations are not
+          changed. At most one distinct wrapper may be configured across the
+          nodes passed to `agenix-rekey.configure`.
         '';
       };
     };

@@ -29,8 +29,9 @@ and will provide you with a smooth rekeying experience. In summary, you get:
 To function properly, agenix-rekey has to do some nix gymnastics. You can read more about [how it works](#how-does-it-work) below. Remarks:
 
 - Since `age-plugin-yubikey` 0.4.0 the PIN is required only once. Using a password protected master key will never
-  have this benefit, and the password will alwas be required for each rekeying operation.
-  There's no way around that without caching the key, which I didn't want to do.
+  have this benefit, and the password will always be required for each rekeying operation.
+  Hardware plugins that provide an explicit command-scoped session can reuse their
+  derived key for a batch without writing it to disk.
 
 ## Overview
 
@@ -980,6 +981,36 @@ A list of plugins that should be available to rage while rekeying.
 They will be added to the PATH with lowest-priority before rage is invoked,
 meaning if you have the plugin installed on your system, that one is preferred
 in an effort to not break complex setups (e.g. WSL passthrough).
+
+## `age.rekey.masterIdentitySessionWrapper`
+
+| Type    | `nullOr package` |
+|-----|-----|
+| Default | `null` |
+| Example | `pkgs.age-plugin-fido2-hmac-session` |
+
+An optional wrapper for the batch commands `agenix rekey` and
+`agenix update-masterkeys`. It is invoked as:
+
+```console
+<wrapper> -- <agenix-command> [args...]
+```
+
+This is intended for hardware-backed plugins that can keep a derived identity
+in locked memory for one command. It allows multiple source files to be
+processed after one physical-presence check, while avoiding a software identity
+on disk. The wrapper must clear its state when the command exits.
+
+The guarantee is one touch per distinct identity that is actually used during
+the command. Identity formats whose cryptographic salt changes per file may
+still require one touch per file. At most one distinct wrapper may be selected
+across the configurations passed to `agenix-rekey.configure`.
+
+Before either batch command enters the wrapper, it prints the complete operation
+plan. `agenix rekey` shows every host and secret target, files that are already
+current, orphan removals, Git staging, and any store deletion or realization.
+`agenix update-masterkeys` lists every source file whose master recipients will
+be updated. Help and path-inspection commands do not start a session.
 
 # ⌨ Environment variables
 
