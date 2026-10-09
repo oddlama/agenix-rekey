@@ -4,8 +4,13 @@
 
 # Usage
 Run `nix flake check` in this subfolder for the VM tests.
-The root flake also runs lightweight evaluation checks, including `required-system-features`.
-To run as specific subtest run:
+The root flake also runs lightweight evaluation checks, including `required-system-features` and `age-plugin-platforms`.
+To run the age plugin platform tests from the repository root:
+```bash
+nix build .#checks.x86_64-linux.age-plugin-platforms
+```
+
+To run a specific VM subtest from this subfolder:
 ```bash
 nix build .#check.<system>.<test-name> -L
 ```

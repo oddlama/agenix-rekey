@@ -28,7 +28,10 @@ let
   # Collect rekeying options from all hosts
   mergeArray = f: unique (concatLists (mapAttrsToList (_: f) nodes));
   mergedAgePlugins = filter (
-    p: (p.system or pkgs.stdenv.hostPlatform.system) == pkgs.stdenv.hostPlatform.system
+    # A cross-compiled plugin's system is its build platform, not where it runs.
+    p:
+    (p.stdenv.hostPlatform.system or (p.system or pkgs.stdenv.hostPlatform.system))
+    == pkgs.stdenv.hostPlatform.system
   ) (mergeArray (x: x.config.age.rekey.agePlugins or [ ]));
   mergedMasterIdentities = mergeArray (x: x.config.age.rekey.masterIdentities or [ ]);
   mergedExtraEncryptionPubkeys = mergeArray (x: x.config.age.rekey.extraEncryptionPubkeys or [ ]);
