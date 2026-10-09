@@ -81,8 +81,8 @@
               # Defaults to rage (pkgs.rage). We only guarantee compatibility for
               # pkgs.age and pkgs.rage.
               agePackage ? (p: p.rage),
-              # Arguments to append to the age decryption command
-              extraDecryptionArgs ? "",
+              # Additional decryption arguments, escaped individually (no shell expansion).
+              extraDecryptionArgs ? [ ],
               # The systems to generate apps for
               systems ? [
                 "x86_64-linux"
@@ -140,6 +140,12 @@
               nixfmt.enable = true;
               rustfmt.enable = true;
             };
+          };
+
+          checks.extra-decryption-args = import ./tests/extra-decryption-args.nix {
+            inherit pkgs;
+            inherit (inputs) flake-parts;
+            agenix-rekey = inputs.self;
           };
 
           packages.default = pkgs.callPackage ./nix/package.nix {

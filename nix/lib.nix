@@ -3,7 +3,7 @@
   pkgs,
   nodes,
   agePackage,
-  extraDecryptionArgs,
+  extraDecryptionArgs ? [ ],
   ...
 }:
 let
@@ -13,6 +13,7 @@ let
     concatMapStrings
     concatStringsSep
     escapeShellArg
+    escapeShellArgs
     filter
     getExe
     hasPrefix
@@ -174,11 +175,15 @@ let
       if [[ "$1" == "encrypt" ]]; then
         ${envPath} ${ageProgram} -e "''${masterIdentityArgs[@]}" ${extraEncryptionPubkeyArgs} "''${@:2}"
       else
+        # Extra decryption arguments are literal, not shell expressions.
+        # Keep the mode in $1 and forward the extra arguments through "$@".
+        # shellcheck disable=SC2016
+        set -- "$1" ${escapeShellArgs extraDecryptionArgs} "''${@:2}"
         # Prepend primary key argument before all others to it gets the first attempt at decrypting.
         if [[ -n "''${AGENIX_REKEY_PRIMARY_IDENTITY:-}" ]] && [[ "''${AGENIX_REKEY_PRIMARY_IDENTITY_ONLY:-}" == true ]]; then
-          ${envPath} ${ageProgram} -d ${extraDecryptionArgs} "''${primaryIdentityArgs[@]}" "''${@:2}"
+          ${envPath} ${ageProgram} -d "''${primaryIdentityArgs[@]}" "''${@:2}"
         else
-          ${envPath} ${ageProgram} -d ${extraDecryptionArgs} "''${primaryIdentityArgs[@]}" ${decryptionMasterIdentityArgs} "''${@:2}"
+          ${envPath} ${ageProgram} -d "''${primaryIdentityArgs[@]}" ${decryptionMasterIdentityArgs} "''${@:2}"
         fi
       fi
     '';

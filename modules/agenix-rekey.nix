@@ -194,8 +194,9 @@ in
     assertions =
       [
         {
-          assertion = config.age.rekey.masterIdentities != [ ];
-          message = "rekey.masterIdentities must be set.";
+          assertion =
+            config.age.rekey.masterIdentities != [ ] || config.age.rekey.extraEncryptionPubkeys != [ ];
+          message = "age.rekey.masterIdentities or age.rekey.extraEncryptionPubkeys must be set.";
         }
         {
           assertion = all isAbsolutePath masterIdentityPaths;
@@ -366,8 +367,8 @@ in
               example = literalExpression "./secrets/password.age";
               description = ''
                 The path to the encrypted .age file for this secret. The file must
-                be encrypted with one of the given `age.rekey.masterIdentities` and not with
-                a host-specific key.
+                be encrypted for `age.rekey.masterIdentities` or `age.rekey.extraEncryptionPubkeys`,
+                not with a host-specific key.
 
                 This secret will automatically be rekeyed for hosts that use it, and the resulting
                 host-specific .age file will be set as actual `file` attribute. So naturally this
@@ -651,6 +652,10 @@ in
           The list of age identities that will be presented to `rage` when decrypting the stored secrets
           to rekey them for your host(s). If multiple identities are given, they will be tried in-order.
 
+          This may be empty when `age.rekey.extraEncryptionPubkeys` supplies the encryption
+          recipients and decryption is configured through `extraDecryptionArgs`, for example
+          when using an implicit plugin identity with `-j`.
+
           The recommended options are:
 
           - Use a split-identity ending in `.pub`, where the private part is not contained (a yubikey identity)
@@ -710,6 +715,7 @@ in
           rekey.masterIdentities by default. Here you can specify an extra set of pubkeys for which
           all secrets should also be encrypted. This is useful in case you want to have a backup indentity
           that must be able to decrypt all secrets but should not be used when attempting regular decryption.
+          When `masterIdentities` is empty, this is the complete set of encryption recipients.
 
           If the coerced string is an absolute path, it will be used as if it was a recipient file.
           Otherwise, the string will be interpreted as a public key.

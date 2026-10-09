@@ -437,6 +437,43 @@ agenix-rekey = agenix-rekey.configure {
 };
 ```
 
+## Additional decryption arguments and implicit plugins
+
+Pass additional arguments as a list; each element is shell-escaped without variable expansion:
+
+```nix
+agenix-rekey = agenix-rekey.configure {
+  # ...
+  extraDecryptionArgs = [ "-j" "example" ];
+};
+```
+
+With flake-parts, use:
+
+```nix
+perSystem.agenix-rekey.extraDecryptionArgs = [ "-j" "example" ];
+```
+
+For a plugin that supports a default identity, `-j example` invokes `age-plugin-example`
+without an identity file. Configure the plugin and its encryption recipient on your hosts:
+
+```nix
+age.rekey = {
+  masterIdentities = [ ];
+  extraEncryptionPubkeys = [ "<recipient provided by the plugin>" ];
+  agePlugins = [ pkgs.age-plugin-example ]; # Replace with your plugin's package.
+};
+```
+
+Replace the plugin name, package and recipient with those provided by your plugin.
+The default backend, rage, rejects `-j` combined with `-i`, so all configurations
+collected by the apps must have empty `masterIdentities` for this setup. Do not set
+`AGENIX_REKEY_PRIMARY_IDENTITY` when using it.
+
+Extra arguments apply to master-secret decryption only, including generator dependencies
+and primary-identity-only mode. They are never passed to encryption or host-side activation.
+At least one master identity or encryption recipient must still be configured.
+
 ## Storage Modes
 
 You have the choice between two storage modes for your rekeyed secrets, which
@@ -488,8 +525,8 @@ will read documentation for additional options added by agenix-rekey.
 | Example | `./secrets/password.age` |
 
 The path to the encrypted .age file for this secret. The file must
-be encrypted with one of the given `age.rekey.masterIdentities` and not with
-a host-specific key.
+be encrypted for `age.rekey.masterIdentities` or `age.rekey.extraEncryptionPubkeys`,
+not with a host-specific key.
 
 This secret will automatically be rekeyed for hosts that use it, and the resulting
 host-specific .age file will be set as an actual `file` attribute. So naturally this
@@ -729,6 +766,9 @@ Make sure to NEVER use a private key here, as it will end up in the public nix s
 The list of age identities that will be presented to `rage` when decrypting the stored secrets
 to rekey them for your host(s). If multiple identities are given, they will be tried in-order.
 
+This may be empty when `age.rekey.extraEncryptionPubkeys` supplies encryption recipients
+and decryption uses [`extraDecryptionArgs`](#additional-decryption-arguments-and-implicit-plugins).
+
 The recommended options are:
 
 - Use a split-identity ending in `.pub`, where the private part is not contained (a yubikey identity)
@@ -786,6 +826,7 @@ When using `agenix edit FILE`, the file will be encrypted for all identities in
 `age.rekey.masterIdentities` by default. Here you can specify an extra set of pubkeys for which
 all secrets should also be encrypted. This is useful in case you want to have a backup identity
 that must be able to decrypt all secrets but should not be used when attempting regular decryption.
+When `masterIdentities` is empty, this is the complete set of encryption recipients.
 
 If the coerced string is an absolute path, it will be used as if it was a recipient file.
 Otherwise, the string will be interpreted as a public key.
