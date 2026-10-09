@@ -135,6 +135,10 @@
             devshell.startup.pre-commit.text = config.pre-commit.installationScript;
           };
 
+          checks.required-system-features = import ./tests/required-system-features.nix {
+            inherit pkgs;
+          };
+
           pre-commit.settings.hooks.treefmt.enable = true;
           treefmt = {
             projectRootFile = "flake.nix";

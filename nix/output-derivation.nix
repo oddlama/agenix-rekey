@@ -10,6 +10,7 @@ let
     escapeShellArg
     filterAttrs
     flip
+    optionalAttrs
     ;
   target = (import ./target-name.nix) {
     config = hostConfig;
@@ -44,44 +45,50 @@ in
 # This is the derivation that copies the rekeyed secrets into the nix-store.
 # We use mkDerivation here to building this derivatoin on any system while
 # allowing the result to be system-agnostic.
-appHostPkgs.stdenv.mkDerivation {
-  name = "agenix-rekey-host-secrets";
-  description = "Rekeyed secrets for ${target}";
+appHostPkgs.stdenv.mkDerivation (
+  {
+    name = "agenix-rekey-host-secrets";
+    description = "Rekeyed secrets for ${target}";
 
-  # No special inputs are necessary.
-  dontUnpack = true;
-  dontPatch = true;
-  dontConfigure = true;
-  dontBuild = true;
-  dontFixup = true;
-  dontCopyDist = true;
+    # No special inputs are necessary.
+    dontUnpack = true;
+    dontPatch = true;
+    dontConfigure = true;
+    dontBuild = true;
+    dontFixup = true;
+    dontCopyDist = true;
 
-  # When this derivation is built, the rekeyed secrets must be copied
-  # into the derivation output, so they are stored permanently and become accessible
-  # to the host via the predictable output path for this derivation
-  installPhase =
-    ''
-      set -euo pipefail
-      mkdir -p "$out"
+    # When this derivation is built, the rekeyed secrets must be copied
+    # into the derivation output, so they are stored permanently and become accessible
+    # to the host via the predictable output path for this derivation
+    installPhase =
+      ''
+        set -euo pipefail
+        mkdir -p "$out"
 
-      function ensure_exists() {
-        [[ -e "$1" ]] || {
-          echo "[1;31mAt least one rekeyed secret is missing, please run \`agenix rekey\` again.[m" >&2
-          echo "[90m  rekeyed secret: $1[m" >&2
-          exit 1
+        function ensure_exists() {
+          [[ -e "$1" ]] || {
+            echo "[1;31mAt least one rekeyed secret is missing, please run \`agenix rekey\` again.[m" >&2
+            echo "[90m  rekeyed secret: $1[m" >&2
+            exit 1
+          }
         }
-      }
-    ''
-    + flip concatMapStrings (attrValues secretsToRekey) (secret: ''
-      ensure_exists ${cachePathFor secret}
-      cp -v ${cachePathFor secret} "$out/"${escapeShellArg "${secret.name}.age"}
-    '')
-    + ''
-      touch $out/success
-    '';
+      ''
+      + flip concatMapStrings (attrValues secretsToRekey) (secret: ''
+        ensure_exists ${cachePathFor secret}
+        cp -v ${cachePathFor secret} "$out/"${escapeShellArg "${secret.name}.age"}
+      '')
+      + ''
+        touch $out/success
+      '';
 
-  passthru = {
-    inherit cachePathFor;
-    inherit (hostConfig.age.rekey) cacheDir;
-  };
-}
+    passthru = {
+      inherit cachePathFor;
+      inherit (hostConfig.age.rekey) cacheDir;
+    };
+  }
+  # Even an empty list would change the existing derivation and output paths.
+  // optionalAttrs (hostConfig.age.rekey.requiredSystemFeatures != [ ]) {
+    inherit (hostConfig.age.rekey) requiredSystemFeatures;
+  }
+)
