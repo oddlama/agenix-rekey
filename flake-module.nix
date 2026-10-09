@@ -43,7 +43,7 @@ in
                   ;
                 inherit (config'.agenix-rekey.pkgs) lib;
               };
-              inherit (config'.agenix-rekey) pkgs;
+              inherit (config'.agenix-rekey) pkgs extraDecryptionArgs;
               agePackage = _: config'.agenix-rekey.agePackage;
               userFlake = self;
             }
@@ -119,6 +119,23 @@ in
               Determines the age package used for encrypting / decrypting.
               Defaults to `pkgs.rage`. We only guarantee compatibility with
               `pkgs.age` and `pkgs.rage`.
+            '';
+          };
+
+          extraDecryptionArgs = mkOption {
+            type = types.listOf types.str;
+            default = [ ];
+            example = [
+              "-j"
+              "plugin"
+            ];
+            description = ''
+              Additional arguments passed to age/rage when decrypting master secrets.
+              Each argument is shell-escaped; shell variables are not expanded.
+              These arguments are also passed in primary-identity-only mode, but never
+              during encryption. With rage, `-j` cannot be combined with identities:
+              leave `age.rekey.masterIdentities` empty and supply encryption recipients
+              through `age.rekey.extraEncryptionPubkeys` instead.
             '';
           };
 
