@@ -41,6 +41,7 @@
       systems = [
         "x86_64-linux"
         "aarch64-linux"
+        "riscv64-linux"
         "x86_64-darwin"
         "aarch64-darwin"
       ];
@@ -90,6 +91,7 @@
               systems ? [
                 "x86_64-linux"
                 "aarch64-linux"
+                "riscv64-linux"
                 "x86_64-darwin"
                 "aarch64-darwin"
               ],
@@ -125,23 +127,30 @@
         {
           config,
           pkgs,
+          system,
           ...
         }:
+        let
+          enableChecks = system != "riscv64-linux";
+        in
         {
           devshells.default = {
             packages = [
               config.treefmt.build.wrapper
             ];
-            devshell.startup.pre-commit.text = config.pre-commit.installationScript;
+            devshell.startup.pre-commit.text =
+              if enableChecks then config.pre-commit.installationScript else "";
           };
 
+          pre-commit.check.enable = enableChecks;
           pre-commit.settings.hooks.treefmt.enable = true;
           treefmt = {
             projectRootFile = "flake.nix";
+            flakeCheck = enableChecks;
             programs = {
               deadnix.enable = true;
               statix.enable = true;
-              nixfmt.enable = true;
+              nixfmt.enable = enableChecks;
               rustfmt.enable = true;
             };
           };
