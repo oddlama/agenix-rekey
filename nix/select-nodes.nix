@@ -4,6 +4,8 @@
   nixosConfigurations,
   darwinConfigurations,
   homeConfigurations,
+  # Fork extension: support for custom configurations (nixidy, terranix, etc)
+  extraConfigurations ? { },
   collectHomeManagerConfigurations,
   ...
 }:
@@ -39,6 +41,8 @@ let
 
   prefixedNixosConfigurations = prefixHosts "nixos" effectiveNixosConfigurations;
   prefixedDarwinConfigurations = prefixHosts "darwin" darwinConfigurations;
+  # Fork extension: prefix custom configurations with "extra:"
+  prefixedExtraConfigurations = prefixHosts "extra" extraConfigurations;
 
   findHomeManagerForHost =
     hostName: hostCfg:
@@ -49,7 +53,8 @@ let
     else
       { };
 
-  effectiveHostConfigurations = prefixedNixosConfigurations // prefixedDarwinConfigurations;
+  effectiveHostConfigurations =
+    prefixedNixosConfigurations // prefixedDarwinConfigurations // prefixedExtraConfigurations;
   listHostConfigsWithHomeManager = mapAttrsToList findHomeManagerForHost effectiveHostConfigurations;
   hmConfigsInsideHostConfiguration = foldl' lib.mergeAttrs { } listHostConfigsWithHomeManager;
 

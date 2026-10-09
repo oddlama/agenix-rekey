@@ -11,9 +11,7 @@ let
     filterAttrs
     flip
     ;
-  target = (import ./target-name.nix) {
-    config = hostConfig;
-  };
+  target = hostConfig.age.rekey.recipientIdentifier;
 
   # All secrets that have rekeyFile set. These will be rekeyed.
   secretsToRekey = flip filterAttrs hostConfig.age.secrets (

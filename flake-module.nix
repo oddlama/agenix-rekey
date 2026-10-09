@@ -39,6 +39,7 @@ in
                   nixosConfigurations
                   darwinConfigurations
                   homeConfigurations
+                  extraConfigurations
                   collectHomeManagerConfigurations
                   ;
                 inherit (config'.agenix-rekey.pkgs) lib;
@@ -99,6 +100,14 @@ in
             description = "All home manager configurations that should be considered for rekeying.";
             default = lib.filterAttrs (_: x: x.config ? age) (self.homeConfigurations or { });
             defaultText = lib.literalExpression "lib.filterAttrs (_: x: x.config ? age) (self.homeConfigurations or { })";
+          };
+
+          # Fork extension: support for custom configurations
+          extraConfigurations = mkOption {
+            type = types.lazyAttrsOf types.unspecified;
+            description = "Custom configurations (nixidy, terranix, etc) that should be considered for rekeying.";
+            default = self.extraConfigurations or { };
+            defaultText = lib.literalExpression "lib.filterAttrs (_: x: x.config ? age) (self.extraConfigurations or { })";
           };
 
           collectHomeManagerConfigurations = mkOption {
