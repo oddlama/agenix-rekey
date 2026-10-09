@@ -799,6 +799,33 @@ approach and has less edge-cases.
 - **Con:** If your repository is public and one of your hosts is compromised, an attacker may decrypt
   any secret that was ever encrypted for that host. This includes secrets that are in the git history.
 
+## `age.rekey.requiredSystemFeatures`
+
+| Type    | `listOf str` |
+|-----|-----|
+| Default | `[]` |
+| Example | `[ "agenix-rekey" ]` |
+
+Only used when `storageMode = "derivation"`.
+
+Required Nix system features for the derivation that copies already rekeyed secrets
+from `cacheDir` into the store. The builder needs access to that cache, not the hardware
+token; token access is needed by `agenix rekey` itself.
+
+To keep this build on the rekeying machine:
+
+```nix
+# On each target configuration using derivation storage:
+age.rekey.requiredSystemFeatures = [ "agenix-rekey" ];
+
+# Only on the machine running agenix rekey (NixOS or nix-darwin):
+nix.settings.extra-system-features = [ "agenix-rekey" ];
+```
+
+Otherwise, advertise the feature with `extra-system-features = agenix-rekey` in that
+machine's `nix.conf`. Do not advertise it on builders without the populated rekey cache.
+This does not replace running `agenix rekey` or granting sandbox access to the cache.
+
 ## `age.rekey.localStorageDir`
 
 | Type    | `path` |

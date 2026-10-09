@@ -3,7 +3,8 @@
 ---
 
 # Usage
-Run `nix flake check` in this subfolder.
+Run `nix flake check` in this subfolder for the VM tests.
+The root flake also runs lightweight evaluation checks, including `required-system-features`.
 To run as specific subtest run:
 ```bash
 nix build .#check.<system>.<test-name> -L

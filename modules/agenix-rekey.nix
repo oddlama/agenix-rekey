@@ -547,12 +547,20 @@ in
       requiredSystemFeatures = mkOption {
         type = types.listOf types.str;
         default = [ ];
+        example = [ "agenix-rekey" ];
         description = ''
-          Additional requiredSystemFeatures to set on the rekeying derivation.
-          Useful for ensuring the derivation is only built on machines that
-          have access to hardware tokens (e.g. YubiKeys) by setting this to
-          [ "yubikey" ] and advertising the feature only on machines with
-          the token attached.
+          Only used when `storageMode = "derivation"`.
+
+          Required Nix system features for the derivation that copies already rekeyed
+          secrets from `cacheDir` into the store. The builder needs access to that cache,
+          not the hardware token; token access is needed by `agenix rekey` itself.
+
+          To keep this build on the rekeying machine, set this to `[ "agenix-rekey" ]`
+          and advertise that feature only there. On NixOS or nix-darwin, set
+          `nix.settings.extra-system-features = [ "agenix-rekey" ];` on that machine.
+          Otherwise, add `extra-system-features = agenix-rekey` to its `nix.conf`.
+
+          This does not replace running `agenix rekey` or granting sandbox access to the cache.
         '';
       };
 
