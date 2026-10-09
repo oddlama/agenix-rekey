@@ -13,16 +13,14 @@ let
     escapeShellArgs
     filterAttrs
     flip
-    hasPrefix
     makeBinPath
     mapAttrsToList
-    removePrefix
     ;
 
   inherit (import ../nix/lib.nix inputs)
-    userFlakeDir
     ageHostEncrypt
     ageMasterDecrypt
+    relativeToFlakeStrict
     ;
 
   # The derivation containing the resulting rekeyed secrets for
@@ -40,6 +38,9 @@ let
     hostCfg: builtins.unsafeDiscardStringContext (toString (derivationFor hostCfg).outPath);
   drvPathFor =
     hostCfg: builtins.unsafeDiscardStringContext (toString (derivationFor hostCfg).drvPath);
+  relativeToFlake = relativeToFlakeStrict ''
+    Paths such as `age.rekey.localStorageDir` and `age.secrets.<name>.rekeyFile` must be constructed relative to the flake root.
+  '';
 
   nodesWithDerivationStorage = attrValues (
     filterAttrs (
@@ -103,6 +104,7 @@ let
               secretName: secret:
               let
                 secretOut = rekeyedSecrets.cachePathFor secret;
+                secretSource = relativeToFlake secret.rekeyFile;
               in
               ''
                 if [[ -e ${secretOut} ]] && [[ "$FORCE" != true ]]; then
@@ -112,14 +114,14 @@ let
                   # Don't escape the out path as it could contain variables we want to expand
                   if reencrypt "${secretOut}" ${
                     escapeShellArgs [
-                      secret.rekeyFile
+                      secretSource
                       secretName
                       hostName
                     ]
                   }; then
                     any_rekeyed=true
                   else
-                    echo "[1;31mFailed to re-encrypt ${secret.rekeyFile} for ${hostName}![m" >&2
+                    echo "[1;31mFailed to re-encrypt ${secretSource} for ${hostName}![m" >&2
                   fi
                 fi
               '';
@@ -155,16 +157,6 @@ let
           '';
         local =
           let
-            relativeToFlake =
-              filePath:
-              let
-                fileStr = builtins.unsafeDiscardStringContext (toString filePath);
-              in
-              if hasPrefix userFlakeDir fileStr then
-                "." + removePrefix userFlakeDir fileStr
-              else
-                throw "Cannot determine true origin of ${fileStr} which doesn't seem to be a direct subpath of the flake directory ${userFlakeDir}. Did you make sure to specify `age.rekey.localStorageDir` relative to the root of your flake?";
-
             hostRekeyDir = relativeToFlake hostCfg.config.age.rekey.localStorageDir;
             rekeyCommand =
               secretName: secret:
@@ -173,6 +165,7 @@ let
                 identHash = builtins.substring 0 32 (
                   builtins.hashString "sha256" (pubkeyHash + builtins.hashFile "sha256" secret.rekeyFile)
                 );
+                secretSource = relativeToFlake secret.rekeyFile;
                 secretOut = "${hostRekeyDir}/${identHash}-${secret.name}.age";
               in
               ''
@@ -186,12 +179,12 @@ let
                   if ! reencrypt ${
                     escapeShellArgs [
                       secretOut
-                      secret.rekeyFile
+                      secretSource
                       secretName
                       hostName
                     ]
                   }; then
-                    echo "[1;31mFailed to re-encrypt ${secret.rekeyFile} for ${hostName}![m" >&2
+                    echo "[1;31mFailed to re-encrypt ${secretSource} for ${hostName}![m" >&2
                   fi
                 fi
               '';
