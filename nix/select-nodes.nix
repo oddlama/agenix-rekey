@@ -76,6 +76,8 @@ assert assertNoOverlappingKeys collectHomeManagerConfigurations
   "homeConfigurations"
   hmConfigsInsideHostConfiguration
   homeConfigurations;
-effectiveHostConfigurations
-// homeConfigurations
-// optionalAttrs collectHomeManagerConfigurations hmConfigsInsideHostConfiguration
+filterAttrs (_: node: node.config.age.enable or true) (
+  effectiveHostConfigurations
+  // homeConfigurations
+  // optionalAttrs collectHomeManagerConfigurations hmConfigsInsideHostConfiguration
+)

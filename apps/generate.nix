@@ -53,11 +53,13 @@ let
     let
       matchingHosts = filter (
         host:
-        any (s: s.id == secret.id && s.rekeyFile == secret.rekeyFile) (
+        any (s: (s.enable or true) && s.id == secret.id && s.rekeyFile == secret.rekeyFile) (
           attrValues nodes.${host}.config.age.secrets
         )
       ) (attrNames nodes);
     in
+    assert assertMsg (secret.enable or true)
+      "Generator dependency ${secret.id} is disabled; use intermediary = true for generator-only secrets instead.";
     warnIf (length matchingHosts > 1)
       "Multiple hosts provide a secret with rekeyFile=[33m${toString secret.rekeyFile}[m, which may have undesired side effects when used in secret generator dependencies."
       (head matchingHosts);
@@ -87,7 +89,7 @@ let
       };
     in
     # Filter secrets that don't need to be generated
-    if secret.generator == null then
+    if !(secret.enable or true) || secret.generator == null then
       set
     else
       # Assert that the generator is the same if it was defined on multiple hosts

@@ -12,6 +12,7 @@ let
     concatMapStrings
     escapeShellArg
     filter
+    filterAttrs
     flatten
     flip
     getExe
@@ -205,11 +206,12 @@ let
     };
   });
 
+  enabledSecrets = filterAttrs (_: secret: secret.enable or true) config.age.secrets;
   masterIdentityPaths = map (x: x.identity) config.age.rekey.masterIdentities;
 in
 {
   config = {
-    assertions =
+    assertions = mkIf (config.age.enable or true) (
       [
         {
           assertion =
@@ -218,7 +220,7 @@ in
         }
       ]
       ++ flatten (
-        flip mapAttrsToList config.age.secrets (
+        flip mapAttrsToList enabledSecrets (
           secretName: secretCfg: [
             {
               assertion = isString secretCfg.generator -> hasAttr secretCfg.generator config.age.generators;
@@ -230,9 +232,10 @@ in
             }
           ]
         )
-      );
+      )
+    );
 
-    warnings =
+    warnings = mkIf (config.age.enable or true) (
       let
         hasGoodSuffix =
           x:
@@ -252,13 +255,14 @@ in
           - Or encrypt your age identity and use the extension `.age`. You can encrypt an age identity
             using `rage -p -o privkey.age privkey` which protects it in your store.
       ''
-      ++ optional (config.age.secrets != { } && config.age.rekey.hostPubkey == dummyPubkey) ''
+      ++ optional (enabledSecrets != { } && config.age.rekey.hostPubkey == dummyPubkey) ''
         You have not yet specified rekey.hostPubkey for your host ${target}.
         All secrets for this host will be rekeyed with a dummy key, resulting in an activation failure.
 
         This is intentional so you can initially deploy your system to read the actual pubkey.
         Once you have the pubkey, set rekey.hostPubkey to the content or a file containing the pubkey.
-      '';
+      ''
+    );
   };
 
   imports = [
@@ -425,18 +429,21 @@ in
           };
           config = {
             # Produce a rekeyed age secret
-            file = mkIf (submod.config.rekeyFile != null) (
-              if submod.config.intermediary then
-                # produce a dummy secret instead, unfortunately there is no way to omit it entirely in agenix as of Nov 2024.
-                dummySecret
-              else if config.age.rekey.hostPubkey == dummyPubkey then
-                # produce a placeholder secret, this is useful for first deployment, when the hostPubkey is not yet known/set.
-                placeholderSecret
-              else if config.age.rekey.storageMode == "derivation" then
-                "${rekeyedSecrets}/${submod.config.name}.age"
-              else
-                rekeyedLocalSecret config.age.secrets.${submod.config.id}
-            );
+            file =
+              mkIf
+                ((config.age.enable or true) && (submod.config.enable or true) && submod.config.rekeyFile != null)
+                (
+                  if submod.config.intermediary then
+                    # produce a dummy secret instead, unfortunately there is no way to omit it entirely in agenix as of Nov 2024.
+                    dummySecret
+                  else if config.age.rekey.hostPubkey == dummyPubkey then
+                    # produce a placeholder secret, this is useful for first deployment, when the hostPubkey is not yet known/set.
+                    placeholderSecret
+                  else if config.age.rekey.storageMode == "derivation" then
+                    "${rekeyedSecrets}/${submod.config.name}.age"
+                  else
+                    rekeyedLocalSecret config.age.secrets.${submod.config.id}
+                );
           };
         })
       );

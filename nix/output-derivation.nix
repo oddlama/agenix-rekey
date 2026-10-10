@@ -26,10 +26,13 @@ let
         else
           "Have you added it to git?";
     in
-    assert assertMsg (
-      secret.rekeyFile != null -> builtins.pathExists secret.rekeyFile
-    ) "age.secrets.${name}.rekeyFile ([33m${toString secret.rekeyFile}[m) doesn't exist. ${hint}";
-    secret.rekeyFile != null && !secret.intermediary
+    (secret.enable or true)
+    && (
+      assert assertMsg (
+        secret.rekeyFile != null -> builtins.pathExists secret.rekeyFile
+      ) "age.secrets.${name}.rekeyFile ([33m${toString secret.rekeyFile}[m) doesn't exist. ${hint}";
+      secret.rekeyFile != null && !secret.intermediary
+    )
   );
 
   # Returns a bash expression that refers to the path where a particular

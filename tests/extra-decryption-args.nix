@@ -147,7 +147,7 @@ let
         };
       };
     in
-    (builtins.head module.config.assertions).assertion;
+    (builtins.head (lib.flatten (lib.modules.dischargeProperties module.config.assertions))).assertion;
 in
 assert hasEncryptionTarget identities [ ];
 assert hasEncryptionTarget [ ] [ pluginRecipient ];
