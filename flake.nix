@@ -141,6 +141,10 @@
             devshell.startup.pre-commit.text = config.pre-commit.installationScript;
           };
 
+          checks.disable = import ./tests/disable.nix {
+            inherit pkgs;
+            inherit (inputs) nixpkgs;
+          };
           checks.required-system-features = import ./tests/required-system-features.nix {
             inherit pkgs;
           };

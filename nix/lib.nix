@@ -15,6 +15,7 @@ let
     escapeShellArg
     escapeShellArgs
     filter
+    filterAttrs
     getExe
     hasPrefix
     mapAttrsToList
@@ -36,7 +37,10 @@ let
   mergedMasterIdentities = mergeArray (x: x.config.age.rekey.masterIdentities or [ ]);
   mergedExtraEncryptionPubkeys = mergeArray (x: x.config.age.rekey.extraEncryptionPubkeys or [ ]);
   mergedSecrets = mergeArray (
-    x: filter (y: y != null) (mapAttrsToList (_: s: s.rekeyFile) x.config.age.secrets)
+    x:
+    filter (y: y != null) (
+      mapAttrsToList (_: s: s.rekeyFile) (filterAttrs (_: s: s.enable or true) x.config.age.secrets)
+    )
   );
 
   isAbsolutePath = x: substring 0 1 x == "/";
