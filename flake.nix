@@ -141,6 +141,7 @@
             devshell.startup.pre-commit.text = config.pre-commit.installationScript;
           };
 
+          checks.rekey-build = import ./tests/rekey-build.nix { inherit pkgs; };
           checks.required-system-features = import ./tests/required-system-features.nix {
             inherit pkgs;
           };

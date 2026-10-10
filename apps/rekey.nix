@@ -241,6 +241,7 @@ let
     [
       coreutils
       findutils
+      jq
       nix
     ]
   );
@@ -435,7 +436,8 @@ pkgs.writeShellScriptBin "agenix-rekey" ''
 
     if [[ "''${#DRVS_TO_BUILD[@]}" -gt 0 ]]; then
       echo "[1;32m   Realizing[m [32m''${#DRVS_TO_BUILD[@]} store paths[m"
-      nix build --no-link --extra-sandbox-paths "''${!SANDBOX_PATHS[*]}" --impure "''${DRVS_TO_BUILD[@]}"
+
+      ${builtins.readFile ./rekey-build.sh}
     else
       echo "Already up to date."
     fi
