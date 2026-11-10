@@ -387,6 +387,7 @@ can use to define our generation script.
 | `file`    | The actual path to the .age file that will be written after this function returns and the content is encrypted. Useful to write additional information to adjacent files. |
 | `deps`    | The list or attrset of all secret files from our `dependencies`. Each entry is a set of `{ name, host, file }`. `host` is always namespaced as `nixos:<host>` or `darwin:<host>`, and the secret corresponds to either `nixosConfigurations.<host>.age.secrets.${name}` or `darwinConfigurations.<host>.age.secrets.${name}`. `file` is the true source location of the secret's `rekeyFile`. You can extract the plaintext with `${decrypt} ${escapeShellArg dep.file}`.
 | `decrypt` | The base rage command that can decrypt secrets to stdout by using the defined `masterIdentities`.
+| `gitAdd`  | A hermetic wrapper around `git add`. When `-a`/`--add-to-git` is active it runs `git add "$@"`; otherwise it is a silent no-op. Call it unconditionally on any companion files your script writes alongside the encrypted secret (e.g. a `.pub` key for a generated private key). Example: `${gitAdd} ${lib.escapeShellArg (lib.removeSuffix ".age" file + ".pub")}` |
 | `...`     | For future/unused arguments
 
 First let's have a look at defining a very simple generator that creates longer passphrases.

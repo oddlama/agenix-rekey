@@ -30,6 +30,7 @@ let
     userFlakeDir
     ageMasterDecrypt
     ageMasterEncrypt
+    gitAdd
     ;
 
   relativeToFlake =
@@ -79,6 +80,11 @@ let
         file = sourceFile;
         name = secretName;
         decrypt = ageMasterDecrypt;
+        # gitAdd is a hermetic wrapper: a no-op when -a/--add-to-git is not
+        # set, or `git add "$@"` when it is.  Generator scripts call it
+        # unconditionally on any companion files they write (e.g. .pub keys).
+        # It reads $ADD_TO_GIT from the environment, exported after arg parsing.
+        inherit gitAdd;
         deps = flip mapListOrAttrs secret.generator.dependencies (dep: {
           host = findHost dep;
           name = dep.id;
@@ -240,6 +246,9 @@ pkgs.writeShellScriptBin "agenix-generate" ''
       return 1
     fi
   }
+
+  # Export so the gitAdd wrapper script (passed to generators) can read it.
+  export ADD_TO_GIT
 
   if [[ ! -e flake.nix ]] ; then
     die "Please execute this script from your flake's root directory."
