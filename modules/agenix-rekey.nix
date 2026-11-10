@@ -158,10 +158,17 @@ let
                      #   You can extract the plaintext with `''${decrypt} ''${escapeShellArg dep.file}`.
             decrypt, # The base rage command that can decrypt secrets to stdout by
                      #   using the defined `masterIdentities`.
+            gitAdd,  # A hermetic wrapper around `git add`.  When -a/--add-to-git
+                     #   is active it runs `git add "$@"`; otherwise it is a no-op.
+                     #   Call it unconditionally on any companion files your script
+                     #   writes alongside the encrypted secret (e.g. a .pub key).
+                     #   Example: ''${gitAdd} ''${lib.escapeShellArg (lib.removeSuffix ".age" file + ".pub")}
             ...      # For future/unused arguments
           }: '''
             priv=$(''${pkgs.wireguard-tools}/bin/wg genkey)
-            ''${pkgs.wireguard-tools}/bin/wg pubkey <<< "$priv" > ''${lib.escapeShellArg (lib.removeSuffix ".age" file + ".pub")}
+            pub_file=''${lib.escapeShellArg (lib.removeSuffix ".age" file + ".pub")}
+            ''${pkgs.wireguard-tools}/bin/wg pubkey <<< "$priv" > "$pub_file"
+            ''${gitAdd} "$pub_file"
             echo "$priv"
           '''
         '';
@@ -171,8 +178,10 @@ let
           added to the internal, global generation script verbatim and runs
           outside of any sandbox. Refer to `age.generators` for example usage.
 
-          This allows you to create/overwrite adjacent files if neccessary, for example
+          This allows you to create/overwrite adjacent files if necessary, for example
           when you also want to store the public key for a generated private key.
+          Use the `gitAdd` argument to stage those companion files alongside the
+          encrypted secret when `-a`/`--add-to-git` is active.
           Refer to the example for a description of the arguments. The resulting
           secret should be written to stdout and any info or errors to stderr.
 
